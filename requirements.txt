@@ -1,0 +1,17 @@
+boto3==1.40.23
+botocore==1.40.23
+celery==5.5.3
+daphne==4.2.1
+Django==5.2.6
+django-celery-beat==2.8.1
+django-filter==25.1
+django-import-export==4.3.9
+django-redis==6.0.0
+django_celery_results==2.6.0
+djangorestframework==3.16.1
+djangorestframework_simplejwt==5.5.1
+pillow==11.3.0
+psycopg2-binary==2.9.10
+PyJWT==2.10.1
+python-crontab==3.3.0
+redis==6.4.0

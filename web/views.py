@@ -1,0 +1,422 @@
+from time import timezone
+
+from django.core.cache import cache
+from django.db.models import Q, Count
+from rest_framework import status, permissions
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.viewsets import ModelViewSet
+
+from oumraa import settings
+from web.models import BlogPostView, BlogPost, BlogTag, BlogCategory
+from web.serializer import *
+
+
+# Create your views here.
+
+# class GetCategoryView(APIView):
+#     permission_classes = [permissions.AllowAny]
+#
+#     def get(self, request):
+#         try:
+#             response_data = {}
+#             category_id = request.query_params.get('category_id')
+#             categories = self._get_cached_categories(category_id)
+#             response_data['categories'] = categories
+#             subcategories = self._get_cached_subcategories(category_id)
+#             response_data['subcategories'] = subcategories
+#             return Response({'data': response_data}, status=status.HTTP_200_OK)
+#         except Exception as e:
+#             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+#
+#     def _get_cached_categories(self, category_id=None):
+#         """Get categories from cache or database"""
+#         if category_id:
+#             cache_key = f'category_{category_id}'
+#         else:
+#             cache_key = 'categories_list_v1'
+#
+#         cache_timeout = getattr(settings, 'CATEGORY_CACHE_TIMEOUT', 7200)
+#
+#         categories = cache.get(cache_key)
+#         if not categories or categories is None:
+#             categories_queryset = Category.active_objects.all().order_by('name')
+#             categories = CategorySerializer(categories_queryset, many=True).data
+#             cache.set(cache_key, categories, cache_timeout)
+#         return categories
+#
+#     def _get_cached_subcategories(self, category_id=None):
+#         """Get subcategories from cache or database"""
+#         if category_id:
+#             cache_key = f'subcategories_category_{category_id}'
+#         else:
+#             cache_key = 'subcategories_all_v1'
+#
+#         cache_timeout = getattr(settings, 'SUBCATEGORY_CACHE_TIMEOUT', 3600)
+#
+#         subcategories = cache.get(cache_key)
+#         if not subcategories or subcategories is None:
+#             queryset = SubCategory.active_objects.filter(category__status='active').select_related('category')
+#
+#             if category_id:
+#                 queryset = queryset.filter(category_id=category_id)
+#
+#             queryset = queryset.order_by('category__name', 'name')
+#             subcategories = SubCategorySerializer(queryset, many=True).data
+#             cache.set(cache_key, subcategories, cache_timeout)
+#
+#         return subcategories
+
+class GetCategoryView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        try:
+            category_id = request.query_params.get("category_id")
+            subcategory_id = request.query_params.get("subcategory_id")
+            categories = self._get_cached_categories(category_id, subcategory_id)
+            return Response({"data": {"categories": categories}}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def _get_cached_categories(self, category_id=None, subcategory_id=None):
+        cache_key = "categories_with_subcategories_v1"
+        if category_id:
+            cache_key += f"_cat{category_id}"
+        if subcategory_id:
+            cache_key += f"_sub{subcategory_id}"
+
+        cache_timeout = getattr(settings, 'CATEGORY_CACHE_TIMEOUT', 7200)
+
+        categories = cache.get(cache_key)
+        if not categories:
+            queryset = Category.active_objects.prefetch_related("sub_categories").order_by("name")
+
+            if category_id:
+                queryset = queryset.filter(id=category_id)
+
+            categories = CategorySerializer(queryset, many=True).data
+            cache.set(cache_key, categories, cache_timeout)
+        return categories
+
+
+class GetProductView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        # try:
+        product_id = request.query_params.get("product_id")
+        category_id = request.query_params.get("category_id")
+        sub_category_id = request.query_params.get("sub_category_id")
+        is_featured = request.query_params.get("is_featured")
+        if is_featured:
+            products = self._get_cached_featured_products(product_id, category_id, sub_category_id)
+        else:
+            products = self._get_cached_products(product_id, category_id, sub_category_id)
+        return Response(products, status=status.HTTP_200_OK)
+        # except Exception as e:
+        #     return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def _get_cached_products(self, product_id=None, category_id=None, sub_category_id=None):
+        cache_key = "products_v1"
+        if product_id:
+            cache_key += f"_id{product_id}"
+        if category_id:
+            cache_key += f"_cat{category_id}"
+        if sub_category_id:
+            cache_key += f"_subcat{sub_category_id}"
+
+        cache_timeout = getattr(settings, 'PRODUCT_CACHE_TIMEOUT', 7200)
+
+        products = cache.get(cache_key)
+        if not products:
+            queryset = Product.active_objects.all().select_related('sub_category').order_by("id")
+            print(queryset, "queryset")
+
+            if product_id:
+                queryset = queryset.filter(id=product_id)
+
+            if category_id:
+                queryset = queryset.filter(sub_category__category=category_id)
+
+            if sub_category_id:
+                queryset = queryset.filter(sub_category=sub_category_id)
+
+            categories = ProductSerializer(queryset, many=True).data
+            cache.set(cache_key, categories, cache_timeout)
+        return products
+
+    def _get_cached_featured_products(self, product_id=None, category_id=None, sub_category_id=None):
+        cache_key = "featured_products_v1"
+        if product_id:
+            cache_key += f"_id{product_id}"
+        if category_id:
+            cache_key += f"_cat{category_id}"
+        if sub_category_id:
+            cache_key += f"_sub{sub_category_id}"
+
+        cache_timeout = getattr(settings, 'CATEGORY_CACHE_TIMEOUT', 7200)
+
+        categories = cache.get(cache_key)
+        if not categories:
+            queryset = Category.active_objects.prefetch_related("sub_categories").order_by("name")
+
+            if category_id:
+                queryset = queryset.filter(id=category_id)
+
+            categories = CategorySerializer(queryset, many=True).data
+            cache.set(cache_key, categories, cache_timeout)
+        return categories
+
+
+class GetProductDetailView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, id):
+        # try:
+        product = Product.objects.filter(id=id).last()
+        serializer = ProductDetailSerializer(product, many=False).data
+        return Response(serializer, status=status.HTTP_200_OK)
+        # except Exception as e:
+        #     return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class GetBlogsView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        try:
+            blog_id = request.query_params.get("blog_id")
+            is_featured = request.query_params.get("is_featured", False)
+            blogs = self._get_cached_blogs(blog_id, is_featured)
+            return Response(blogs, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def _get_cached_blogs(self, blog_id=None, is_featured=False):
+        cache_key = "blogs_v1"
+        if blog_id:
+            cache_key += f"_id{blog_id}"
+
+        if is_featured:
+            cache_key += f"_featured_blogs"
+
+        cache_timeout = getattr(settings, 'BLOGS_CACHE_TIMEOUT', 7200)
+
+        blogs = cache.get(cache_key)
+        if not blogs:
+            queryset = BlogPost.active_objects.all().select_related('author', 'category').order_by("id")
+
+            if blog_id:
+                queryset = queryset.filter(id=blog_id)
+
+            if is_featured:
+                queryset = queryset.filter(is_featured=True)[:5]
+
+            categories = BlogPostListSerializer(queryset, many=True).data
+            cache.set(cache_key, categories, cache_timeout)
+        return blogs
+
+
+class GetBlogDetailView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, id):
+        try:
+            blog = (BlogPost.objects.select_related("author", "category")
+                    .prefetch_related("tags", "comments").filter(id=id).first())
+            serializer = BlogPostDetailSerializer(blog, context={"request": request}).data
+            return Response(serializer, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class BlogPostViewSet(ModelViewSet):
+    """ViewSet for blog posts"""
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return BlogPostListSerializer
+        elif self.action in ['create', 'update', 'partial_update']:
+            return BlogPostCreateUpdateSerializer
+        return BlogPostDetailSerializer
+
+    def get_permissions(self):
+        """Set permissions based on action"""
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            permission_classes = [permissions.IsAdminUser]
+        else:
+            permission_classes = [permissions.AllowAny]
+        return [permission() for permission in permission_classes]
+
+    def get_queryset(self):
+        queryset = BlogPost.objects.active().select_related(
+            'author', 'category'
+        ).prefetch_related('tags')
+
+        # Filter by status for public views
+        if not (self.request.user.is_authenticated and self.request.user.is_staff):
+            queryset = queryset.filter(post_status='published')
+
+        # Filters
+        category = self.request.query_params.get('category')
+        if category:
+            queryset = queryset.filter(category__slug=category)
+
+        tag = self.request.query_params.get('tag')
+        if tag:
+            queryset = queryset.filter(tags__slug=tag)
+
+        author = self.request.query_params.get('author')
+        if author:
+            queryset = queryset.filter(author__id=author)
+
+        # Featured posts
+        if self.request.query_params.get('featured') == 'true':
+            queryset = queryset.filter(is_featured=True)
+
+        # Trending posts
+        if self.request.query_params.get('trending') == 'true':
+            queryset = queryset.filter(is_trending=True)
+
+        # Search
+        search = self.request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(
+                Q(title__icontains=search) |
+                Q(excerpt__icontains=search) |
+                Q(content__icontains=search) |
+                Q(tags__name__icontains=search)
+            ).distinct()
+
+        return queryset.order_by('-created_at')
+
+    def retrieve(self, request, *args, **kwargs):
+        """Get single post and increment view count"""
+        instance = self.get_object()
+
+        # Increment view count
+        if not request.user.is_staff:  # Don't count admin views
+            instance.increment_views()
+
+            # Track detailed view analytics
+            self.track_post_view(instance, request)
+
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
+    def track_post_view(self, post, request):
+        """Track post view for analytics"""
+        # Get client IP
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+
+        # Create view record
+        BlogPostView.objects.create(
+            post=post,
+            user=request.user if request.user.is_authenticated else None,
+            session_key=request.session.session_key,
+            ip_address=ip,
+            user_agent=request.META.get('HTTP_USER_AGENT', ''),
+            referrer=request.META.get('HTTP_REFERER', '')
+        )
+
+    @action(detail=True, methods=['post'])
+    def like(self, request, pk=None):
+        """Like/unlike a blog post"""
+        post = self.get_object()
+
+        # In a real app, you'd track individual likes
+        # For now, just increment the counter
+        post.likes_count += 1
+        post.save(update_fields=['likes_count'])
+
+        return Response({
+            'message': 'Post liked',
+            'likes_count': post.likes_count
+        })
+
+    @action(detail=True, methods=['post'])
+    def share(self, request, pk=None):
+        """Track post share"""
+        post = self.get_object()
+
+        post.shares_count += 1
+        post.save(update_fields=['shares_count'])
+
+        return Response({
+            'message': 'Share tracked',
+            'shares_count': post.shares_count
+        })
+
+    @action(detail=True, methods=['get', 'post'])
+    def comments(self, request, pk=None):
+        """Get or create comments for a post"""
+        post = self.get_object()
+
+        if request.method == 'GET':
+            comments = post.comments.filter(
+                comment_status='approved', parent=None
+            ).order_by('-created_at')
+
+            serializer = BlogCommentSerializer(
+                comments, many=True, context={'request': request}
+            )
+            return Response({
+                'comments': serializer.data,
+                'count': comments.count()
+            })
+
+        elif request.method == 'POST':
+            if not post.allow_comments:
+                return Response({
+                    'error': 'Comments are disabled for this post'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            serializer = BlogCommentCreateSerializer(
+                data=request.data,
+                context={'request': request, 'post': post}
+            )
+
+            if serializer.is_valid():
+                comment = serializer.save()
+                return Response({
+                    'message': 'Comment submitted for approval',
+                    'comment': BlogCommentSerializer(comment, context={'request': request}).data
+                }, status=status.HTTP_201_CREATED)
+
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# @api_view(['GET'])
+# @permission_classes([permissions.AllowAny])
+# def blog_categories_list(request):
+#     """Get all active blog categories"""
+#     categories = BlogCategory.objects.active().annotate(
+#         posts_count=Count('posts', filter=Q(posts__post_status='published'))
+#     ).order_by('sort_order', 'name')
+#
+#     serializer = BlogCategorySerializer(categories, many=True)
+#     return Response({
+#         'categories': serializer.data,
+#         'count': len(serializer.data)
+#     })
+#
+#
+# @api_view(['GET'])
+# @permission_classes([permissions.AllowAny])
+# def blog_tags_list(request):
+#     """Get all active blog tags"""
+#     tags = BlogTag.objects.active().annotate(
+#         posts_count=Count('posts', filter=Q(posts__post_status='published'))
+#     ).filter(posts_count__gt=0).order_by('-posts_count', 'name')
+#
+#     serializer = BlogTagSerializer(tags, many=True)
+#     return Response({
+#         'tags': serializer.data,
+#         'count': len(serializer.data)
+#     })
