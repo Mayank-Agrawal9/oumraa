@@ -14,7 +14,7 @@ from datetime import timedelta
 from pathlib import Path
 
 try:
-    from ass.settings_local import *
+    from oumraa.settings_local import *
 except ImportError:
     pass
 
