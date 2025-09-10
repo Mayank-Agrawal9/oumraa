@@ -1,12 +1,13 @@
 from decimal import Decimal
 
-from django.db.models import Avg, Q, F, Count
+from django.db.models import Avg, Q, F, Count, Sum
 from django.utils import timezone
 from rest_framework import serializers
 
 from oumraa import settings
 from product.models import Category, SubCategory, Product, ProductImage, Brand, ProductAttribute, ProductVariant, \
-    Review, ProductTax, ProductVariantAttribute, Coupon
+    Review, ProductTax, ProductVariantAttribute, Coupon, ProductFAQ, CartItem, Cart
+from web.helpers import CartManager
 from web.models import BlogCategory, BlogTag, BlogComment, BlogPost
 
 
@@ -701,7 +702,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         ).exclude(id=obj.id).annotate(
             avg_rating=Avg('reviews__rating'),
             reviews_count=Count('reviews')
-        ).order_by('-is_featured', '-avg_rating')[:8]
+        ).order_by('-is_featured', '-avg_rating')[:3]
 
         return RelatedProductSerializer(related, many=True).data
 
@@ -772,3 +773,181 @@ class ProductDetailSerializer(serializers.ModelSerializer):
                       sales_score * sales_weight) * 100
 
         return round(popularity, 1)
+
+
+class ProductFaqSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = ProductFAQ
+        fields = ['id', 'question', 'answer']
+
+
+class ProductVariantMinimalSerializer(serializers.ModelSerializer):
+    """Minimal product variant info for cart"""
+    attributes = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProductVariant
+        fields = ['id', 'sku', 'price', 'attributes']
+
+    def get_attributes(self, obj):
+        """Get variant attributes"""
+        if hasattr(obj, 'attributes'):
+            return {
+                attr.attribute.name: attr.value.value
+                for attr in obj.attributes.select_related('attribute', 'value').all()
+            }
+        return {}
+
+
+class ProductMinimalSerializer(serializers.ModelSerializer):
+    """Minimal product info for cart"""
+    primary_image = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Product
+        fields = ['id', 'name', 'slug', 'price', 'stock_quantity', 'primary_image']
+
+    def get_primary_image(self, obj):
+        """Get primary image"""
+        primary_img = obj.images.filter(is_primary=True).first()
+        if primary_img:
+            return {
+                'thumbnail_url': primary_img.thumbnail_url,
+                'alt_text': primary_img.alt_text
+            }
+        return None
+
+
+class CartItemSerializer(serializers.ModelSerializer):
+    """Cart item serializer"""
+    product = ProductMinimalSerializer(read_only=True)
+    product_variant = ProductVariantMinimalSerializer(read_only=True)
+    item_total = serializers.SerializerMethodField()
+    is_available = serializers.SerializerMethodField()
+    max_quantity = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CartItem
+        fields = [
+            'id', 'product', 'product_variant', 'quantity', 'unit_price',
+            'item_total', 'is_available', 'max_quantity', 'created_on', 'updated_on'
+        ]
+
+    def get_item_total(self, obj):
+        """Calculate item total"""
+        return obj.unit_price * obj.quantity
+
+    def get_is_available(self, obj):
+        """Check if product is still available"""
+        if obj.product_variant:
+            return obj.product_variant.stock_quantity >= obj.quantity
+        return obj.product.stock_quantity >= obj.quantity
+
+    def get_max_quantity(self, obj):
+        """Get maximum available quantity"""
+        if obj.product_variant:
+            return obj.product_variant.stock_quantity
+        return obj.product.stock_quantity
+
+
+class CartSerializer(serializers.ModelSerializer):
+    """Complete cart serializer"""
+    items = CartItemSerializer(many=True, read_only=True)
+    totals = serializers.SerializerMethodField()
+    items_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Cart
+        fields = [
+            'id', 'items', 'totals', 'items_count',
+            'created_on', 'updated_on'
+        ]
+
+    def get_totals(self, obj):
+        """Get cart totals"""
+        return CartManager.calculate_cart_totals(obj)
+
+    def get_items_count(self, obj):
+        """Get total items count"""
+        return obj.items.aggregate(total=Sum('quantity'))['total'] or 0
+
+
+class AddToCartSerializer(serializers.Serializer):
+    """Serializer for adding items to cart"""
+    product_id = serializers.UUIDField()
+    product_variant_id = serializers.UUIDField(required=False, allow_null=True)
+    quantity = serializers.IntegerField(min_value=1, default=1)
+
+    def validate_product_id(self, value):
+        """Validate product exists and is active"""
+        try:
+            product = Product.objects.active().get(id=value, status='active')
+            return value
+        except Product.DoesNotExist:
+            raise serializers.ValidationError("Product not found or inactive")
+
+    def validate_product_variant_id(self, value):
+        """Validate product variant if provided"""
+        if value:
+            try:
+                variant = ProductVariant.objects.get(id=value, is_active=True)
+                return value
+            except ProductVariant.DoesNotExist:
+                raise serializers.ValidationError("Product variant not found or inactive")
+        return value
+
+    def validate(self, data):
+        """Cross-field validation"""
+        product_id = data['product_id']
+        variant_id = data.get('product_variant_id')
+        quantity = data['quantity']
+
+        # Get product
+        product = Product.objects.get(id=product_id)
+
+        # Check stock availability
+        if variant_id:
+            variant = ProductVariant.objects.get(id=variant_id)
+            if variant.product != product:
+                raise serializers.ValidationError("Variant does not belong to the specified product")
+
+            available_stock = variant.stock_quantity
+            unit_price = variant.price or product.price
+        else:
+            available_stock = product.stock_quantity
+            unit_price = product.price
+
+        # Validate stock
+        if available_stock < quantity:
+            raise serializers.ValidationError(f"Only {available_stock} items available in stock")
+
+        # Add calculated fields to validated data
+        data['unit_price'] = unit_price
+        data['available_stock'] = available_stock
+
+        return data
+
+
+class UpdateCartItemSerializer(serializers.Serializer):
+    """Serializer for updating cart item quantity"""
+    quantity = serializers.IntegerField(min_value=0)  # 0 to remove item
+
+    def validate_quantity(self, value):
+        """Validate quantity against stock"""
+        cart_item = self.context.get('cart_item')
+        if not cart_item:
+            return value
+
+        if value > 0:
+            # Check stock availability
+            if cart_item.product_variant:
+                available_stock = cart_item.product_variant.stock_quantity
+            else:
+                available_stock = cart_item.product.stock_quantity
+
+            if value > available_stock:
+                raise serializers.ValidationError(f"Only {available_stock} items available in stock")
+
+        return value
+

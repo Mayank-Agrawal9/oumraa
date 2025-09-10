@@ -18,6 +18,8 @@ urlpatterns = [
     path('logout/', UserLogoutView.as_view(), name='user-logout'),
     path('profile/', UserProfileView.as_view(), name='user-profile'),
     path('update-profile/', UpdateUserProfileView.as_view(), name='update-profile'),
+    path('change-password/', PasswordChangeAPI.as_view(), name='password-change'),
+    path('forgot-password/', ForgotPasswordChangeAPI.as_view(), name='forgot-password'),
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 ]

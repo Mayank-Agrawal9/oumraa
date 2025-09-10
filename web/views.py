@@ -1,14 +1,13 @@
-from time import timezone
 
 from django.core.cache import cache
-from django.db.models import Q, Count
+from django.db import transaction
 from rest_framework import status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 
-from oumraa import settings
+from product.models import ProductFAQ
 from web.models import BlogPostView, BlogPost, BlogTag, BlogCategory
 from web.serializer import *
 
@@ -105,18 +104,18 @@ class GetProductView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
-        # try:
-        product_id = request.query_params.get("product_id")
-        category_id = request.query_params.get("category_id")
-        sub_category_id = request.query_params.get("sub_category_id")
-        is_featured = request.query_params.get("is_featured")
-        if is_featured:
-            products = self._get_cached_featured_products(product_id, category_id, sub_category_id)
-        else:
-            products = self._get_cached_products(product_id, category_id, sub_category_id)
-        return Response(products, status=status.HTTP_200_OK)
-        # except Exception as e:
-        #     return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        try:
+            product_id = request.query_params.get("product_id")
+            category_id = request.query_params.get("category_id")
+            sub_category_id = request.query_params.get("sub_category_id")
+            is_featured = request.query_params.get("is_featured")
+            if is_featured:
+                products = self._get_cached_featured_products(product_id, category_id, sub_category_id)
+            else:
+                products = self._get_cached_products(product_id, category_id, sub_category_id)
+            return Response(products, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def _get_cached_products(self, product_id=None, category_id=None, sub_category_id=None):
         cache_key = "products_v1"
@@ -132,7 +131,6 @@ class GetProductView(APIView):
         products = cache.get(cache_key)
         if not products:
             queryset = Product.active_objects.all().select_related('sub_category').order_by("id")
-            print(queryset, "queryset")
 
             if product_id:
                 queryset = queryset.filter(id=product_id)
@@ -174,12 +172,24 @@ class GetProductDetailView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request, id):
-        # try:
-        product = Product.objects.filter(id=id).last()
-        serializer = ProductDetailSerializer(product, many=False).data
-        return Response(serializer, status=status.HTTP_200_OK)
-        # except Exception as e:
-        #     return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            product = Product.objects.filter(id=id).last()
+            serializer = ProductDetailSerializer(product, many=False).data
+            return Response(serializer, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class GetProductFaqView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, id):
+        try:
+            product_faq = ProductFAQ.objects.filter(product=id).order_by('sort_order')
+            serializer = ProductFaqSerializer(product_faq, many=True).data
+            return Response(serializer, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class GetBlogsView(APIView):
@@ -420,3 +430,372 @@ class BlogPostViewSet(ModelViewSet):
 #         'tags': serializer.data,
 #         'count': len(serializer.data)
 #     })
+
+
+class CartSummaryView(APIView):
+
+    def get(self, request):
+        """Get user's current cart"""
+        cart = CartManager.get_cart(request)
+
+        if not cart:
+            return Response({
+                'success': True, 'cart': None, 'message': 'Cart is empty'
+            })
+
+        cart = Cart.objects.prefetch_related(
+            'items__product__images',
+            'items__product_variant__attributes__attribute',
+            'items__product_variant__attributes__value'
+        ).get(id=cart.id)
+
+        serializer = CartSerializer(cart)
+
+        return Response({
+            'success': True, 'cart': serializer.data
+        })
+
+
+class AddToCartView(APIView):
+
+    def post(self, request):
+        serializer = AddToCartSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return Response({
+                'success': False, 'errors': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        validated_data = serializer.validated_data
+
+        try:
+            with transaction.atomic():
+                cart, cart_created = CartManager.get_or_create_cart(request)
+                product = Product.objects.get(id=validated_data['product_id'])
+                product_variant = None
+                if validated_data.get('product_variant_id'):
+                    product_variant = ProductVariant.objects.get(id=validated_data['product_variant_id'])
+
+                try:
+                    cart_item = CartItem.objects.get(
+                        cart=cart, product=product, product_variant=product_variant
+                    )
+
+                    # Update quantity
+                    new_quantity = cart_item.quantity + validated_data['quantity']
+
+                    # Check stock for new quantity
+                    max_stock = validated_data['available_stock']
+                    if new_quantity > max_stock:
+                        return Response({
+                            'success': False,
+                            'error': f'Cannot add {validated_data["quantity"]} more. Only {max_stock - cart_item.quantity} more available.',
+                            'current_quantity': cart_item.quantity,
+                            'max_available': max_stock
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
+                    cart_item.quantity = new_quantity
+                    cart_item.unit_price = validated_data['unit_price']
+                    cart_item.save()
+
+                    action = 'updated'
+
+                except Exception as e:
+                    cart_item = CartItem.objects.create(
+                        cart=cart, product=product,
+                        product_variant=product_variant,
+                        quantity=validated_data['quantity'],
+                        unit_price=validated_data['unit_price']
+                    )
+
+                    action = 'added'
+
+                # Get updated cart
+                updated_cart = Cart.objects.prefetch_related(
+                    'items__product__images',
+                    'items__product_variant__attributes__attribute',
+                    'items__product_variant__attributes__value'
+                ).get(id=cart.id)
+
+                cart_serializer = CartSerializer(updated_cart)
+
+                return Response({
+                    'success': True,
+                    'message': f'Product {action} to cart successfully',
+                    'cart': cart_serializer.data,
+                    'added_item': CartItemSerializer(cart_item).data
+                }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': 'Failed to add item to cart',
+                'details': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class UpdateToCartView(APIView):
+
+    def post(self, request, id):
+        """Update cart item quantity"""
+        cart = CartManager.get_cart(request)
+        if not cart:
+            return Response({
+                'success': False, 'error': 'Cart not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            cart_item = CartItem.objects.get(id=id, cart=cart)
+        except CartItem.DoesNotExist:
+            return Response({
+                'success': False, 'error': 'Cart item not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = UpdateCartItemSerializer(
+            data=request.data,
+            context={'cart_item': cart_item}
+        )
+
+        if not serializer.is_valid():
+            return Response({
+                'success': False, 'errors': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        new_quantity = serializer.validated_data['quantity']
+
+        try:
+            with transaction.atomic():
+                if new_quantity == 0:
+                    # Remove item from cart
+                    cart_item.delete()
+                    message = 'Item removed from cart'
+                else:
+                    # Update quantity
+                    cart_item.quantity = new_quantity
+                    cart_item.save()
+                    message = 'Cart item updated successfully'
+
+                # Get updated cart
+                updated_cart = Cart.objects.prefetch_related(
+                    'items__product__images',
+                    'items__product_variant__attributes__attribute',
+                    'items__product_variant__attributes__value'
+                ).get(id=cart.id)
+
+                cart_serializer = CartSerializer(updated_cart)
+
+                return Response({
+                    'success': True, 'message': message, 'cart': cart_serializer.data
+                })
+
+        except Exception as e:
+            return Response({
+                'success': False, 'error': 'Failed to update cart item', 'details': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class RemoveCartItemView(APIView):
+
+    def post(self, request, item_id):
+        """Remove item from cart"""
+        cart = CartManager.get_cart(request)
+        if not cart:
+            return Response({
+                'success': False, 'error': 'Cart not found'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            cart_item = CartItem.objects.get(id=item_id, cart=cart)
+            product_name = cart_item.product.name
+            cart_item.delete()
+
+            # Get updated cart
+            updated_cart = Cart.objects.prefetch_related(
+                'items__product__images',
+                'items__product_variant__attributes__attribute',
+                'items__product_variant__attributes__value'
+            ).get(id=cart.id)
+
+            cart_serializer = CartSerializer(updated_cart)
+
+            return Response({
+                'success': True,
+                'message': f'{product_name} removed from cart',
+                'cart': cart_serializer.data
+            })
+
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': 'Cart item not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+
+class ClearCartView(APIView):
+
+        def get(self, request):
+            """Clear all items from cart"""
+            cart = CartManager.get_cart(request)
+            if not cart:
+                return Response({
+                    'success': False,
+                    'error': 'Cart not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            items_count = cart.items.count()
+            cart.items.all().delete()
+
+            return Response({
+                'success': True,
+                'message': f'Cart cleared. {items_count} items removed.',
+                'cart': None
+            })
+
+
+class CartSummeryView(APIView):
+
+    def get(self, request):
+        """Get cart summary (quick overview)"""
+        cart = CartManager.get_cart(request)
+
+        if not cart:
+            return Response({
+                'success': True,
+                'summary': {
+                    'items_count': 0,
+                    'total_amount': '0.00',
+                    'is_empty': True
+                }
+            })
+
+        totals = CartManager.calculate_cart_totals(cart)
+
+        return Response({
+            'success': True,
+            'summary': {
+                'items_count': totals['total_items'],
+                'total_amount': str(totals['total']),
+                'subtotal': str(totals['subtotal']),
+                'is_empty': totals['total_items'] == 0
+            }
+        })
+
+
+class MergeCartAccountView(APIView):
+
+    def post(self, request):
+        try:
+            CartManager.merge_guest_cart_to_user(request, request.user)
+
+            user_cart = Cart.objects.filter(
+                user=request.user,
+                status='active'
+            ).prefetch_related(
+                'items__product__images',
+                'items__product_variant__attributes__attribute',
+                'items__product_variant__attributes__value'
+            ).first()
+
+            if user_cart:
+                cart_serializer = CartSerializer(user_cart)
+                return Response({
+                    'success': True,
+                    'message': 'Guest cart merged successfully',
+                    'cart': cart_serializer.data
+                })
+            else:
+                return Response({
+                    'success': True,
+                    'message': 'No items to merge',
+                    'cart': None
+                })
+
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': 'Failed to merge cart',
+                'details': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ============================================================================
+# 4. BULK CART OPERATIONS
+# ============================================================================
+
+# @api_view(['POST'])
+# @permission_classes([permissions.AllowAny])
+# @parser_classes([JSONParser])
+# def bulk_add_to_cart(request):
+#     """Add multiple products to cart at once"""
+#     items = request.data.get('items', [])
+#
+#     if not items:
+#         return Response({
+#             'success': False,
+#             'error': 'No items provided'
+#         }, status=status.HTTP_400_BAD_REQUEST)
+#
+#     try:
+#         with transaction.atomic():
+#             cart, _ = CartManager.get_or_create_cart(request)
+#             added_items = []
+#             errors = []
+#
+#             for item_data in items:
+#                 serializer = AddToCartSerializer(data=item_data)
+#
+#                 if serializer.is_valid():
+#                     validated_data = serializer.validated_data
+#
+#                     # Get product and variant
+#                     product = Product.objects.get(id=validated_data['product_id'])
+#                     product_variant = None
+#                     if validated_data.get('product_variant_id'):
+#                         product_variant = ProductVariant.objects.get(id=validated_data['product_variant_id'])
+#
+#                     # Add or update cart item
+#                     cart_item, created = CartItem.objects.get_or_create(
+#                         cart=cart,
+#                         product=product,
+#                         product_variant=product_variant,
+#                         defaults={
+#                             'quantity': validated_data['quantity'],
+#                             'unit_price': validated_data['unit_price']
+#                         }
+#                     )
+#
+#                     if not created:
+#                         cart_item.quantity += validated_data['quantity']
+#                         cart_item.unit_price = validated_data['unit_price']
+#                         cart_item.save()
+#
+#                     added_items.append(CartItemSerializer(cart_item).data)
+#                 else:
+#                     errors.append({
+#                         'item': item_data,
+#                         'errors': serializer.errors
+#                     })
+#
+#             # Get updated cart
+#             updated_cart = Cart.objects.prefetch_related(
+#                 'items__product__images',
+#                 'items__product_variant__attributes__attribute',
+#                 'items__product_variant__attributes__value'
+#             ).get(id=cart.id)
+#
+#             cart_serializer = CartSerializer(updated_cart)
+#
+#             return Response({
+#                 'success': True,
+#                 'message': f'{len(added_items)} items added to cart',
+#                 'cart': cart_serializer.data,
+#                 'added_items': added_items,
+#                 'errors': errors
+#             })
+#
+#     except Exception as e:
+#         return Response({
+#             'success': False,
+#             'error': 'Failed to add items to cart',
+#             'details': str(e)
+#         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -1,3 +1,4 @@
+from django.db.models import Q
 from rest_framework import status, permissions, generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -168,3 +169,47 @@ class StateViewSet(BaseViewSetSetup):
         'create': 'object_created_message',
         'update': 'object_updated_message'
     }
+
+
+class PasswordChangeAPI(APIView):
+    '''When user is register then it will be able to change the password.'''
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def post(self, request):
+        password = request.data.get("password")
+        confirm_password = request.data.get("confirm_password")
+        if not password and confirm_password:
+            return Response({'error': 'Password and confirm password should be mandatory.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if password != confirm_password:
+            return Response({'error': 'Invalid Password! Password does not match.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        user = User.objects.get(pk=self.request.user.id)
+        user.set_password(password)
+        user.save()
+        return Response({'status': True, 'message': 'Password changed successfully! '},
+                        status=status.HTTP_200_OK)
+
+
+class ForgotPasswordChangeAPI(APIView):
+    '''When user is register then it will be able to change the password.'''
+
+    def post(self, request):
+        username = request.data.get("username")
+        password = request.data.get("password")
+        confirm_password = request.data.get("confirm_password")
+        if not password and confirm_password and username:
+            return Response({'error': 'Password and confirm password and username should be mandatory.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if password != confirm_password:
+            return Response({'error': 'Invalid Password! Password does not match.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        user = User.objects.filter(Q(username=username) | Q(email=username)).last()
+        if not user:
+            return Response({'status': False, 'message': 'There is no user register with this email.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        user.set_password(password)
+        user.save()
+        return Response({'status': True, 'message': 'Password changed successfully! '},
+                        status=status.HTTP_200_OK)
