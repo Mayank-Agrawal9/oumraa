@@ -522,10 +522,8 @@ class ProductDetailSerializer(serializers.ModelSerializer):
 
     def get_reviews(self, obj):
         """Get recent reviews (limited)"""
-        recent_reviews = obj.reviews.filter(
-            is_approved=True
+        recent_reviews = obj.reviews.filter(is_approved=True
         ).select_related('user').order_by('-created_at')[:10]
-
         return ReviewSummarySerializer(recent_reviews, many=True).data
 
     def get_rating_summary(self, obj):
@@ -618,13 +616,11 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         # Get active coupons that are currently valid
         now = timezone.now()
         coupons = Coupon.objects.filter(
-            status='active',
-            valid_from__lte=now,
-            valid_until__gte=now,
+            status='active', valid_from__lte=now, valid_until__gte=now,
             minimum_amount__lte=obj.price
         ).filter(
             Q(usage_limit__isnull=True) | Q(usage_limit__gt=F('used_count'))
-        )[:5]  # Limit to 5 coupons
+        )[:5]
 
         coupon_data = []
         for coupon in coupons:
@@ -696,12 +692,10 @@ class ProductDetailSerializer(serializers.ModelSerializer):
 
     def get_related_products(self, obj):
         """Get related products"""
-        # Get products from same category
         related = Product.objects.active().filter(
             sub_category=obj.sub_category,
             status='active'
-        ).exclude(id=obj.id).annotate(
-            avg_rating=Avg('reviews__rating'),
+        ).exclude(id=obj.id).annotate(avg_rating=Avg('reviews__rating'),
             reviews_count=Count('reviews')
         ).order_by('-is_featured', '-avg_rating')[:3]
 

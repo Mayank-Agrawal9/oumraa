@@ -215,3 +215,38 @@ class AdminActivityLog(ModelMixin):
             models.Index(fields=['action_type']),
             models.Index(fields=['model_name']),
         ]
+
+
+class ContactUs(ModelMixin):
+    name = models.CharField(max_length=100)
+    email = models.EmailField()
+    phone_number = models.CharField(max_length=15)
+    subject = models.CharField(max_length=255)
+    message = models.TextField()
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['name']),
+            models.Index(fields=['email']),
+            models.Index(fields=['phone_number'])
+        ]
+
+
+class NewsletterSubscriber(models.Model):
+    email = models.EmailField(unique=True)
+    is_active = models.BooleanField(default=True)
+    date_subscribed = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.email
+
+
+class NewsletterCampaign(models.Model):
+    subject = models.CharField(max_length=255)
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    scheduled_at = models.DateTimeField(null=True, blank=True)
+    sent = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.subject

@@ -135,6 +135,48 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return user
 
 
+class UserGoogleRegistrationSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, required=False)
+    password_confirm = serializers.CharField(write_only=True, required=False)
+
+    class Meta:
+        model = User
+        fields = [
+            "username", "email", "password", "password_confirm",
+            "first_name", "last_name", "phone_number",
+            "date_of_birth", "user_type", "gender", "profile_image"
+        ]
+        extra_kwargs = {
+            "email": {"required": True},
+            "first_name": {"required": True},
+            "last_name": {"required": True},
+        }
+
+    def validate(self, attrs):
+        if not self.context.get("social_login", False):
+            if attrs.get("password") != attrs.get("password_confirm"):
+                raise serializers.ValidationError("Passwords don't match.")
+        return attrs
+
+    def create(self, validated_data):
+        social_login = self.context.get("social_login", False)
+        if social_login:
+            validated_data.pop("password", None)
+            validated_data.pop("password_confirm", None)
+            email = validated_data["email"]
+            user, created = User.objects.get_or_create(
+                username=email, defaults=validated_data
+            )
+            return user
+        else:
+            validated_data.pop("password_confirm")
+            password = validated_data.pop("password")
+            user = User.objects.create_user(**validated_data)
+            user.set_password(password)
+            user.save()
+            return user
+
+
 class UserLoginSerializer(serializers.Serializer):
     username = serializers.CharField()
     password = serializers.CharField(write_only=True)
@@ -179,3 +221,15 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["first_name", "last_name", "date_of_birth", "gender", "profile_image"]
+
+
+class ContactUsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContactUs
+        fields = ["id", "name", "email", "phone_number", "subject", "message"]
+
+
+class NewsletterSubscriberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NewsletterSubscriber
+        fields = ["id", "email"]

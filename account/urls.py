@@ -22,4 +22,8 @@ urlpatterns = [
     path('forgot-password/', ForgotPasswordChangeAPI.as_view(), name='forgot-password'),
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('contact-us/', ContactUsAPIView.as_view(), name='contact-us'),
+    path('newsletter/', NewsLetterAPIView.as_view(), name='newsletter'),
+    path('test/', TestAPIView.as_view(), name='test-us'),
+    path('google-login/', GoogleLoginAPIView.as_view(), name='google-login'),
 ]

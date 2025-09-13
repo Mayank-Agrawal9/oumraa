@@ -76,3 +76,22 @@ class CountryAdmin(CustomModelAdminMixin, ImportExportModelAdmin):
     resource_class = CountryResource
     search_fields = ['id', 'name']
     list_filter = ('status', )
+
+
+@admin.register(ContactUs)
+class ContactUsAdmin(CustomModelAdminMixin, ImportExportModelAdmin):
+    resource_class = ContactUsResource
+    search_fields = ['id', 'name', 'email', 'phone_number']
+    list_filter = ('status', )
+
+
+@admin.register(NewsletterSubscriber)
+class NewsletterSubscriberAdmin(CustomModelAdminMixin, ImportExportModelAdmin):
+    resource_class = NewsletterSubscriberResource
+    search_fields = ['id', 'email']
+
+
+@admin.register(NewsletterCampaign)
+class NewsletterCampaignAdmin(CustomModelAdminMixin, ImportExportModelAdmin):
+    resource_class = NewsletterCampaignResource
+    search_fields = ['id', 'subject']

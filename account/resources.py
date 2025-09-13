@@ -66,3 +66,24 @@ class CountryResource(resources.ModelResource):
         model = Country
         import_id_fields = ('id',)
         exclude = EXCLUDE_FOR_API
+
+
+class ContactUsResource(resources.ModelResource):
+    class Meta:
+        model = ContactUs
+        import_id_fields = ('id',)
+        exclude = EXCLUDE_FOR_API
+
+
+class NewsletterSubscriberResource(resources.ModelResource):
+    class Meta:
+        model = NewsletterSubscriber
+        import_id_fields = ('id',)
+        exclude = EXCLUDE_FOR_API
+
+
+class NewsletterCampaignResource(resources.ModelResource):
+    class Meta:
+        model = NewsletterCampaign
+        import_id_fields = ('id',)
+        exclude = EXCLUDE_FOR_API

@@ -1,4 +1,8 @@
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
 from rest_framework_simplejwt.tokens import RefreshToken
+
+from oumraa import settings
 
 
 def get_client_ip(request):
@@ -18,3 +22,17 @@ def get_tokens_for_user(user):
         'refresh': str(refresh),
         'access': str(refresh.access_token),
     }
+
+
+def send_templated_mail(subject, template_name, context, to_email, from_email=None):
+    """
+    Send email using Django template.
+    """
+    if from_email is None:
+        from_email = settings.DEFAULT_FROM_EMAIL
+
+    html_content = render_to_string(template_name, context)
+
+    msg = EmailMultiAlternatives(subject, html_content, from_email, [to_email])
+    msg.attach_alternative(html_content, "text/html")
+    msg.send()

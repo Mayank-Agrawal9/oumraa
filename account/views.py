@@ -1,4 +1,5 @@
 from django.db.models import Q
+from google.oauth2 import id_token
 from rest_framework import status, permissions, generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -6,7 +7,10 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from account.helpers import get_client_ip, get_tokens_for_user
 from account.serializer import *
+from oumraa import settings
 from utils.base_viewset import BaseViewSetSetup
+from account.tasks import send_contact_email_task, send_newsletter_joining_mail, send_instant_email
+from google.auth.transport import requests
 
 
 # Create your views here.
@@ -23,6 +27,9 @@ class UserRegistrationView(generics.CreateAPIView):
             user.last_login_ip = get_client_ip(request)
             user.save(update_fields=['last_login_ip'])
             tokens = get_tokens_for_user(user)
+            send_instant_email.delay(subject="Thank You for registration", email_to=user.email,
+                                     template='emails/registration.html',
+                                     context={'name': user.get_full_name(), 'email': user.email})
 
             return Response({
                 'message': 'User registered successfully',
@@ -213,3 +220,76 @@ class ForgotPasswordChangeAPI(APIView):
         user.save()
         return Response({'status': True, 'message': 'Password changed successfully! '},
                         status=status.HTTP_200_OK)
+
+
+class TestAPIView(APIView):
+    def post(self, request):
+        # send_newsletter()
+        return Response({'status': True, 'message': 'Password changed successfully! '},
+                        status=status.HTTP_200_OK)
+
+
+class ContactUsAPIView(APIView):
+    def post(self, request):
+        serializer = ContactUsSerializer(data=request.data)
+        if serializer.is_valid():
+            contact = serializer.save()
+            send_contact_email_task.delay(
+                contact.name, contact.email, contact.phone_number, contact.subject, contact.message
+            )
+            return Response(
+                {"message": "Your request has been submitted successfully."}, status=status.HTTP_200_OK,
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class NewsLetterAPIView(APIView):
+    def post(self, request):
+        serializer = NewsletterSubscriberSerializer(data=request.data)
+        if serializer.is_valid():
+            newsletter = serializer.save()
+            send_newsletter_joining_mail.delay(newsletter.email)
+            return Response(
+                {"message": "Thank you for subscribing to our newsletter."}, status=status.HTTP_200_OK,
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class GoogleLoginAPIView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        token = request.data.get("token")
+        if not token:
+            return Response({"error": "Token is required"}, status=400)
+
+        try:
+            idinfo = id_token.verify_oauth2_token(token, requests.Request(), settings.GOOGLE_CLIENT_ID)
+        except Exception as e:
+            return Response({"error": "Invalid token", "details": str(e)}, status=400)
+
+        email = idinfo.get("email")
+        first_name = idinfo.get("given_name", "")
+        last_name = idinfo.get("family_name", "")
+        picture = idinfo.get("picture", "")
+
+        user = User.objects.filter(username=email).first()
+
+        if not user:
+            serializer = UserGoogleRegistrationSerializer(
+                data={
+                    "username": email, "email": email,
+                    "first_name": first_name, "last_name": last_name,
+                    "profile_image": picture,
+                },
+                context={"social_login": True}
+            )
+            serializer.is_valid(raise_exception=True)
+            user = serializer.save()
+
+        tokens = get_tokens_for_user(user)
+
+        return Response({
+            "message": "User logged in with Google", "user": UserProfileSerializer(user).data,
+            "tokens": tokens
+        })

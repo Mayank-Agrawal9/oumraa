@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Welcome to Our Newsletter!</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f7f7f7;
+        margin: 0;
+        padding: 0;
+      }
+      .container {
+        max-width: 600px;
+        margin: auto;
+        background: #ffffff;
+        padding: 20px;
+        border-radius: 8px;
+      }
+      .header {
+        background: #4a90e2;
+        color: #fff;
+        text-align: center;
+        padding: 15px;
+        border-radius: 8px 8px 0 0;
+      }
+      .content {
+        padding: 20px;
+        color: #333;
+        line-height: 1.6;
+      }
+      .btn {
+        display: inline-block;
+        padding: 10px 20px;
+        margin-top: 15px;
+        background: #4a90e2;
+        color: #fff;
+        text-decoration: none;
+        border-radius: 4px;
+      }
+      .footer {
+        margin-top: 20px;
+        font-size: 12px;
+        text-align: center;
+        color: #999;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>Welcome to Our Newsletter!</h1>
+      </div>
+
+      <div class="content">
+        <p>Hello {{ name }},</p>
+        <p>
+          Thank you for joining our newsletter! We’re excited to have you on board.
+          You’ll receive the latest updates, exclusive offers, and valuable content directly in your inbox.
+        </p>
+        <p>
+          Stay tuned and don’t forget to explore our website for exciting news and offers.
+        </p>
+
+        <a href="www.oumraa.com" class="btn">Visit Our Website</a>
+      </div>
+
+      <div class="footer">
+        <p>If you wish to unsubscribe at any time, click <a href="http://127.0.0.1:8000">here</a>.</p>
+      </div>
+    </div>
+  </body>
+</html>
