@@ -178,8 +178,8 @@ AUTH_USER_MODEL = "account.User"
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        # "LOCATION": "redis://127.0.0.1:6379/1",
-        "LOCATION": "redis://:OMRAA_REDIS_REDIS@127.0.0.1:6379/1",
+        "LOCATION": "redis://127.0.0.1:6379/1",
+        # "LOCATION": "redis://:OMRAA_REDIS_REDIS@127.0.0.1:6379/1",
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
         }

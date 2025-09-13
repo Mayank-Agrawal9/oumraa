@@ -79,6 +79,8 @@ class Product(ModelMixin):
     meta_title = models.CharField(max_length=255, null=True, blank=True)
     meta_description = models.TextField(null=True, blank=True)
     is_featured = models.BooleanField(default=False)
+    is_popular = models.BooleanField(default=False)
+    is_best_seller = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'products'
@@ -101,6 +103,18 @@ class Product(ModelMixin):
         """Get primary image URL (medium size)"""
         primary = self.primary_image
         return primary.medium_url if primary else '/static/public/images/no-image.png'
+
+    @property
+    def category_name(self):
+        """Get primary image URL (medium size)"""
+        sub_category = self.sub_category
+        return sub_category.name if sub_category else None
+
+    @property
+    def sub_category_name(self):
+        """Get primary image URL (medium size)"""
+        sub_category = self.sub_category
+        return sub_category.category.name if sub_category else None
 
     @property
     def image_gallery(self):

@@ -109,8 +109,11 @@ class GetProductView(APIView):
             category_id = request.query_params.get("category_id")
             sub_category_id = request.query_params.get("sub_category_id")
             is_featured = request.query_params.get("is_featured")
-            if is_featured:
-                products = self._get_cached_featured_products(product_id, category_id, sub_category_id)
+            is_popular = request.query_params.get("is_popular")
+            is_best_seller = request.query_params.get("is_best_seller")
+            if is_featured or is_popular or is_best_seller:
+                products = self._get_cached_featured_products(product_id, category_id, sub_category_id, is_featured,
+                                                              is_popular, is_best_seller)
             else:
                 products = self._get_cached_products(product_id, category_id, sub_category_id)
             return Response(products, status=status.HTTP_200_OK)
@@ -145,27 +148,49 @@ class GetProductView(APIView):
             cache.set(cache_key, categories, cache_timeout)
         return products
 
-    def _get_cached_featured_products(self, product_id=None, category_id=None, sub_category_id=None):
+    def _get_cached_featured_products(self, product_id=None, category_id=None, sub_category_id=None, is_featured=None,
+                                      is_best_seller=None, is_popular=None):
         cache_key = "featured_products_v1"
         if product_id:
             cache_key += f"_id{product_id}"
         if category_id:
             cache_key += f"_cat{category_id}"
         if sub_category_id:
-            cache_key += f"_sub{sub_category_id}"
+            cache_key += f"_subcat{sub_category_id}"
+        if is_featured:
+            cache_key += f"_featured"
+        if is_best_seller:
+            cache_key += f"_is_best_seller"
+        if is_popular:
+            cache_key += f"_is_popular"
 
-        cache_timeout = getattr(settings, 'CATEGORY_CACHE_TIMEOUT', 7200)
+        cache_timeout = getattr(settings, 'PRODUCT_CACHE_TIMEOUT', 7200)
 
-        categories = cache.get(cache_key)
-        if not categories:
-            queryset = Category.active_objects.prefetch_related("sub_categories").order_by("name")
+        products = cache.get(cache_key)
+        if not products:
+            queryset = Product.active_objects.all().select_related('sub_category').order_by("id")
+
+            if product_id:
+                queryset = queryset.filter(id=product_id)
 
             if category_id:
-                queryset = queryset.filter(id=category_id)
+                queryset = queryset.filter(sub_category__category=category_id)
 
-            categories = CategorySerializer(queryset, many=True).data
+            if sub_category_id:
+                queryset = queryset.filter(sub_category=sub_category_id)
+
+            if is_featured:
+                queryset = queryset.filter(is_featured=is_featured)
+
+            if is_best_seller:
+                queryset = queryset.filter(is_best_seller=is_best_seller)
+
+            if is_popular:
+                queryset = queryset.filter(is_popular=is_popular)
+
+            categories = ProductSerializer(queryset, many=True).data
             cache.set(cache_key, categories, cache_timeout)
-        return categories
+        return products
 
 
 class GetProductDetailView(APIView):

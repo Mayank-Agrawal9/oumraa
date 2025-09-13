@@ -30,7 +30,8 @@ class ProductSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Product
-        fields = ('id', 'name', 'slug', 'short_description', 'sku', 'price', 'primary_image_url')
+        fields = ('id', 'name', 'slug', 'short_description', 'sku', 'price', 'primary_image_url', 'category_name',
+                  'sub_category_name')
 
 
 class BlogCategorySerializer(serializers.ModelSerializer):
