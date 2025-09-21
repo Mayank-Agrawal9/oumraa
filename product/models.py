@@ -5,6 +5,7 @@ from account.models import User
 from oumraa.space_manager import DigitalOceanSpacesManager
 from product.choicees import *
 from utils.models import ModelMixin, TaxRate
+from django.core.cache import cache
 
 
 # Create your models here.
@@ -26,6 +27,14 @@ class Category(ModelMixin):
             models.Index(fields=['parent'])
         ]
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        cache.clear()
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        cache.clear()
+
 
 class SubCategory(ModelMixin):
     name = models.CharField(max_length=255, unique=True)
@@ -43,6 +52,14 @@ class SubCategory(ModelMixin):
             models.Index(fields=['category'])
         ]
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        cache.clear()
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        cache.clear()
+
 
 class Brand(ModelMixin):
     name = models.CharField(max_length=255, unique=True)
@@ -55,6 +72,14 @@ class Brand(ModelMixin):
         indexes = [
             models.Index(fields=['slug'])
         ]
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        cache.clear()
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        cache.clear()
 
 
 class Product(ModelMixin):
@@ -92,6 +117,14 @@ class Product(ModelMixin):
             models.Index(fields=['is_featured']),
             models.Index(fields=['price']),
         ]
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        cache.clear()
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        cache.clear()
 
     @property
     def primary_image(self):
@@ -599,3 +632,21 @@ class OrderStatusHistory(ModelMixin):
         indexes = [
             models.Index(fields=['order']),
         ]
+
+
+class Banner(ModelMixin):
+    title = models.CharField(max_length=255)
+    image = models.URLField(max_length=1000)
+    subcategories = models.ManyToManyField(SubCategory, related_name="banners")
+    sort_order = models.IntegerField(default=0)
+
+    def __str__(self):
+        return self.title
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        cache.clear()
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        cache.clear()

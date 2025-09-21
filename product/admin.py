@@ -224,3 +224,10 @@ class OrderStatusHistoryAdmin(CustomModelAdminMixin, ImportExportModelAdmin):
     search_fields = ['id', 'notes']
     raw_id_fields = ('order', )
     list_filter = ('status', )
+
+
+@admin.register(Banner)
+class BannerAdmin(CustomModelAdminMixin, ImportExportModelAdmin):
+    resource_class = BannerResource
+    search_fields = ['id', 'title']
+    list_filter = ('status', )

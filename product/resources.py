@@ -199,3 +199,10 @@ class OrderStatusHistoryResource(resources.ModelResource):
         model = OrderStatusHistory
         import_id_fields = ('id',)
         exclude = EXCLUDE_FOR_API
+
+
+class BannerResource(resources.ModelResource):
+    class Meta:
+        model = Banner
+        import_id_fields = ('id',)
+        exclude = EXCLUDE_FOR_API

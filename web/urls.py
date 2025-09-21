@@ -16,4 +16,7 @@ urlpatterns = [
     path('clear-cart/', ClearCartView.as_view(), name='clear-cart-item'),
     path('cart-summary/', CartSummeryView.as_view(), name='card-summary'),
     path('cart-summary/', MergeCartAccountView.as_view(), name='merge.card-summary'),
+    path('banner-list/', GetBannerView.as_view(), name='get_homepage_banner'),
+    path('sub-category/', ProductsBySubCategoryAPIView.as_view(), name='product_by_subcategory'),
+    path('brands/', GetBrandAPIView.as_view(), name='get_brand'),
 ]

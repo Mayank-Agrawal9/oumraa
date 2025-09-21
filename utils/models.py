@@ -1,5 +1,6 @@
 import uuid
 
+from django.core.cache import cache
 from django.db import models
 
 from utils.choices import STATUS_TYPE
@@ -203,6 +204,14 @@ class Banner(ModelMixin):
             models.Index(fields=['banner_type', 'status']),
             models.Index(fields=['valid_from', 'valid_until']),
         ]
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        cache.clear()
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        cache.clear()
 
 
 class EmailTemplate(ModelMixin):

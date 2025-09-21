@@ -3,11 +3,12 @@ from django.core.cache import cache
 from django.db import transaction
 from rest_framework import status, permissions
 from rest_framework.decorators import action
+from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 
-from product.models import ProductFAQ
+from product.models import ProductFAQ, Banner
 from web.models import BlogPostView, BlogPost, BlogTag, BlogCategory
 from web.serializer import *
 
@@ -89,7 +90,7 @@ class GetCategoryView(APIView):
         cache_timeout = getattr(settings, 'CATEGORY_CACHE_TIMEOUT', 7200)
 
         categories = cache.get(cache_key)
-        if not categories:
+        if categories is None:
             queryset = Category.active_objects.prefetch_related("sub_categories").order_by("name")
 
             if category_id:
@@ -111,16 +112,29 @@ class GetProductView(APIView):
             is_featured = request.query_params.get("is_featured")
             is_popular = request.query_params.get("is_popular")
             is_best_seller = request.query_params.get("is_best_seller")
+
+            min_price = request.query_params.get("min_price")
+            max_price = request.query_params.get("max_price")
+            brand_id = request.query_params.get("brand_id")
+
             if is_featured or is_popular or is_best_seller:
-                products = self._get_cached_featured_products(product_id, category_id, sub_category_id, is_featured,
-                                                              is_popular, is_best_seller)
+                products = self._get_cached_featured_products(
+                    product_id, category_id, sub_category_id,
+                    is_featured, is_popular, is_best_seller,
+                    min_price, max_price, brand_id
+                )
             else:
-                products = self._get_cached_products(product_id, category_id, sub_category_id)
+                products = self._get_cached_products(
+                    product_id, category_id, sub_category_id,
+                    min_price, max_price, brand_id
+                )
+
             return Response(products, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    def _get_cached_products(self, product_id=None, category_id=None, sub_category_id=None):
+    def _get_cached_products(self, product_id=None, category_id=None, sub_category_id=None,
+                             min_price=None, max_price=None, brand_id=None):
         cache_key = "products_v1"
         if product_id:
             cache_key += f"_id{product_id}"
@@ -128,28 +142,39 @@ class GetProductView(APIView):
             cache_key += f"_cat{category_id}"
         if sub_category_id:
             cache_key += f"_subcat{sub_category_id}"
+        if min_price:
+            cache_key += f"_min{min_price}"
+        if max_price:
+            cache_key += f"_max{max_price}"
+        if brand_id:
+            cache_key += f"_brand{brand_id}"
 
         cache_timeout = getattr(settings, 'PRODUCT_CACHE_TIMEOUT', 7200)
-
         products = cache.get(cache_key)
-        if not products:
+
+        if products is None:
             queryset = Product.active_objects.all().select_related('sub_category').order_by("id")
 
             if product_id:
                 queryset = queryset.filter(id=product_id)
-
             if category_id:
                 queryset = queryset.filter(sub_category__category=category_id)
-
             if sub_category_id:
                 queryset = queryset.filter(sub_category=sub_category_id)
+            if min_price:
+                queryset = queryset.filter(price__gte=min_price)
+            if max_price:
+                queryset = queryset.filter(price__lte=max_price)
+            if brand_id:
+                queryset = queryset.filter(brand_id=brand_id)
 
-            categories = ProductSerializer(queryset, many=True).data
-            cache.set(cache_key, categories, cache_timeout)
+            products = ProductSerializer(queryset, many=True).data
+            cache.set(cache_key, products, cache_timeout)
         return products
 
-    def _get_cached_featured_products(self, product_id=None, category_id=None, sub_category_id=None, is_featured=None,
-                                      is_best_seller=None, is_popular=None):
+    def _get_cached_featured_products(self, product_id=None, category_id=None, sub_category_id=None,
+                                      is_featured=None, is_best_seller=None, is_popular=None,
+                                      min_price=None, max_price=None, brand_id=None):
         cache_key = "featured_products_v1"
         if product_id:
             cache_key += f"_id{product_id}"
@@ -163,33 +188,40 @@ class GetProductView(APIView):
             cache_key += f"_is_best_seller"
         if is_popular:
             cache_key += f"_is_popular"
+        if min_price:
+            cache_key += f"_min{min_price}"
+        if max_price:
+            cache_key += f"_max{max_price}"
+        if brand_id:
+            cache_key += f"_brand{brand_id}"
 
         cache_timeout = getattr(settings, 'PRODUCT_CACHE_TIMEOUT', 7200)
-
         products = cache.get(cache_key)
-        if not products:
+
+        if products is None:
             queryset = Product.active_objects.all().select_related('sub_category').order_by("id")
 
             if product_id:
                 queryset = queryset.filter(id=product_id)
-
             if category_id:
                 queryset = queryset.filter(sub_category__category=category_id)
-
             if sub_category_id:
                 queryset = queryset.filter(sub_category=sub_category_id)
-
             if is_featured:
-                queryset = queryset.filter(is_featured=is_featured)
-
+                queryset = queryset.filter(is_featured=True)
             if is_best_seller:
-                queryset = queryset.filter(is_best_seller=is_best_seller)
-
+                queryset = queryset.filter(is_best_seller=True)
             if is_popular:
-                queryset = queryset.filter(is_popular=is_popular)
+                queryset = queryset.filter(is_popular=True)
+            if min_price:
+                queryset = queryset.filter(price__gte=min_price)
+            if max_price:
+                queryset = queryset.filter(price__lte=max_price)
+            if brand_id:
+                queryset = queryset.filter(brand_id=brand_id)
 
-            categories = ProductSerializer(queryset, many=True).data
-            cache.set(cache_key, categories, cache_timeout)
+            products = ProductSerializer(queryset, many=True).data
+            cache.set(cache_key, products, cache_timeout)
         return products
 
 
@@ -240,7 +272,7 @@ class GetBlogsView(APIView):
         cache_timeout = getattr(settings, 'BLOGS_CACHE_TIMEOUT', 7200)
 
         blogs = cache.get(cache_key)
-        if not blogs:
+        if blogs is None:
             queryset = BlogPost.active_objects.all().select_related('author', 'category').order_by("id")
 
             if blog_id:
@@ -824,3 +856,90 @@ class MergeCartAccountView(APIView):
 #             'error': 'Failed to add items to cart',
 #             'details': str(e)
 #         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ProductsBySubCategoryAPIView(APIView):
+
+    def post(self, request, *args, **kwargs):
+        subcategory_ids = request.data.get("subcategory_ids", [])
+        page_number = request.query_params.get("page", 1)
+        page_size = request.query_params.get("page_size", 10)
+
+        cache_key = f"products_subcategories_{'_'.join(map(str, subcategory_ids))}_page_{page_number}_size_{page_size}"
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return Response(cached_data)
+
+        products = Product.objects.filter(subcategory_id__in=subcategory_ids).order_by("id")
+
+        paginator = LimitOffsetPagination()
+        page = paginator.paginate_queryset(products, request)
+        serializer = ProductSerializer(page, many=True)
+
+        paginated_response = paginator.get_paginated_response(serializer.data)
+
+        cache.set(cache_key, paginated_response.data, timeout=600)
+
+        return paginated_response
+
+
+class GetBannerView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        try:
+            banner_id = request.query_params.get("banner_id")
+            subcategory_id = request.query_params.get("subcategory_id")
+            banners = self._get_cached_banners(banner_id, subcategory_id)
+            return Response({"data": {"banners": banners}}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def _get_cached_banners(self, banner_id=None, subcategory_id=None):
+        cache_key = "banners_v1"
+        if banner_id:
+            cache_key += f"_id{banner_id}"
+        if subcategory_id:
+            cache_key += f"_subcat{subcategory_id}"
+
+        cache_timeout = getattr(settings, "BANNER_CACHE_TIMEOUT", 7200)
+
+        banners = cache.get(cache_key)
+        if banners is None:
+            queryset = Banner.objects.prefetch_related("subcategories").order_by("-sort_order")
+
+            if banner_id:
+                queryset = queryset.filter(id=banner_id)
+
+            if subcategory_id:
+                queryset = queryset.filter(subcategories=subcategory_id)
+
+            banners = BannerSerializer(queryset, many=True).data
+            cache.set(cache_key, banners, cache_timeout)
+
+        return banners
+
+
+class GetBrandAPIView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        try:
+            brands = self._get_cached_brands()
+            return Response(brands, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def _get_cached_brands(self, banner_id=None, subcategory_id=None):
+        cache_key = "brands_v1"
+
+        cache_timeout = getattr(settings, "BRAND_CACHE_TIMEOUT", 7200)
+
+        brands = cache.get(cache_key)
+        if brands is None:
+            queryset = Brand.objects.active().order_by("created_at")
+
+            brands = BrandsSerializer(queryset, many=True).data
+            cache.set(cache_key, brands, cache_timeout)
+
+        return brands

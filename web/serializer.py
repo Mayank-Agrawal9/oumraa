@@ -6,7 +6,7 @@ from rest_framework import serializers
 
 from oumraa import settings
 from product.models import Category, SubCategory, Product, ProductImage, Brand, ProductAttribute, ProductVariant, \
-    Review, ProductTax, ProductVariantAttribute, Coupon, ProductFAQ, CartItem, Cart
+    Review, ProductTax, ProductVariantAttribute, Coupon, ProductFAQ, CartItem, Cart, Banner
 from web.helpers import CartManager
 from web.models import BlogCategory, BlogTag, BlogComment, BlogPost
 
@@ -31,7 +31,7 @@ class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = ('id', 'name', 'slug', 'short_description', 'sku', 'price', 'primary_image_url', 'category_name',
-                  'sub_category_name')
+                  'sub_category_name', 'is_featured', 'is_popular', 'is_best_seller')
 
 
 class BlogCategorySerializer(serializers.ModelSerializer):
@@ -945,4 +945,19 @@ class UpdateCartItemSerializer(serializers.Serializer):
                 raise serializers.ValidationError(f"Only {available_stock} items available in stock")
 
         return value
+
+
+class BannerSerializer(serializers.ModelSerializer):
+    subcategories = SubCategorySerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Banner
+        fields = ["id", "title", "image", "subcategories", "created_at"]
+
+
+class BrandsSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Brand
+        fields = ["id", "name", "logo"]
 
