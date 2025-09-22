@@ -1,5 +1,4 @@
 from django.db import transaction
-from django.utils.text import slugify
 from django.views.generic import ListView
 from rest_framework import status, permissions, generics
 from rest_framework.decorators import permission_classes, api_view, action
@@ -322,9 +321,6 @@ class AdminProductCreateAPIView(APIView):
 
     def _create_product(self, validated_data):
         """Create product instance"""
-        # Generate slug if not provided
-        if not validated_data.get('slug'):
-            validated_data['slug'] = self._generate_unique_slug(validated_data['name'])
 
         # Get category and brand
         category = Category.objects.get(id=validated_data['category_id'])
@@ -335,7 +331,6 @@ class AdminProductCreateAPIView(APIView):
         # Create product
         product = Product.objects.create(
             name=validated_data['name'],
-            slug=validated_data['slug'],
             description=validated_data['description'],
             short_description=validated_data.get('short_description', ''),
             category=category,
@@ -360,18 +355,6 @@ class AdminProductCreateAPIView(APIView):
         )
 
         return product
-
-    def _generate_unique_slug(self, name):
-        """Generate unique slug for product"""
-        base_slug = slugify(name)
-        slug = base_slug
-        counter = 1
-
-        while Product.objects.filter(slug=slug).exists():
-            slug = f"{base_slug}-{counter}"
-            counter += 1
-
-        return slug
 
     def _create_product_variants(self, product, variants_data):
         """Create product variants"""

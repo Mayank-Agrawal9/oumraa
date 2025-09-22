@@ -30,7 +30,7 @@ class CategorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Category
-        fields = ['id', 'name', 'slug', 'parent']
+        fields = ['id', 'name', 'parent']
 
 
 class SubCategorySerializer(serializers.ModelSerializer):
@@ -56,7 +56,6 @@ class ListWishlistSerializer(serializers.ModelSerializer):
         return ({
             'id': obj.product.id,
             'name': obj.product.name,
-            'slug': obj.product.slug,
             'short_description': obj.product.short_description,
             'image': obj.product.primary_image_url,
             'price': obj.product.price,
@@ -127,7 +126,7 @@ class BrandSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Brand
-        fields = ['id', 'name', 'slug', 'logo']
+        fields = ['id', 'name', 'logo']
 
 
 class ProductAttributeSerializer(serializers.ModelSerializer):
@@ -136,7 +135,7 @@ class ProductAttributeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProductAttribute
-        fields = ['id', 'name', 'slug', 'is_required', 'values']
+        fields = ['id', 'name', 'is_required', 'values']
 
     def get_values(self, obj):
         return [{'id': v.id, 'value': v.value} for v in obj.values.all()]
@@ -178,7 +177,6 @@ class ProductCreateSerializer(serializers.Serializer):
 
     # Basic Product Information
     name = serializers.CharField(max_length=500)
-    slug = serializers.SlugField(max_length=500, required=False, allow_blank=True)
     description = serializers.CharField(style={'base_template': 'textarea.html'})
     short_description = serializers.CharField(max_length=500, required=False, allow_blank=True)
 
@@ -248,16 +246,6 @@ class ProductCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError("SKU already exists")
         return value
 
-    def validate_slug(self, value):
-        """Validate and generate slug"""
-        if not value:
-            # Will be generated from name in create method
-            return value
-
-        if Product.objects.filter(slug=value).exists():
-            raise serializers.ValidationError("Slug already exists")
-        return value
-
     def validate_variants(self, value):
         """Validate variants data"""
         if not value:
@@ -306,7 +294,7 @@ class ProductResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = [
-            'id', 'name', 'slug', 'description', 'short_description',
+            'id', 'name', 'description', 'short_description',
             'category', 'brand', 'sku', 'price', 'compare_price', 'cost_price',
             'stock_quantity', 'low_stock_threshold', 'track_inventory', 'allow_backorder',
             'weight', 'length', 'width', 'height',
@@ -327,7 +315,6 @@ class ListOrderItemSerializer(serializers.ModelSerializer):
         return ({
             'id': obj.product.id,
             'name': obj.product.name,
-            'slug': obj.product.slug,
             'short_description': obj.product.short_description,
             'image': obj.product.primary_image_url,
             'price': obj.product.price,
@@ -338,9 +325,7 @@ class ListOrderItemSerializer(serializers.ModelSerializer):
         if obj.product_variant:
             return ({
                 'id': obj.product_variant.id,
-                'sku': obj.product_variant.name,
-                'price': obj.product_variant.slug
-
+                'sku': obj.product_variant.name
             })
         return None
 

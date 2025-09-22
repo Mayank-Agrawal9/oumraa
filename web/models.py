@@ -1,6 +1,5 @@
 from django.db import models
 from django.utils import timezone
-from django.utils.text import slugify
 
 from account.models import User
 from utils.models import ModelMixin
@@ -13,7 +12,6 @@ from web.choices import *
 class BlogCategory(ModelMixin):
     """Blog categories for organizing posts"""
     name = models.CharField(max_length=100, unique=True)
-    slug = models.SlugField(max_length=100, unique=True, blank=True)
     description = models.TextField(blank=True, null=True)
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children')
     meta_title = models.CharField(max_length=255, blank=True)
@@ -29,7 +27,6 @@ class BlogCategory(ModelMixin):
         verbose_name_plural = 'Blog Categories'
         ordering = ['sort_order', 'name']
         indexes = [
-            models.Index(fields=['slug']),
             models.Index(fields=['parent']),
             models.Index(fields=['sort_order']),
         ]
@@ -38,21 +35,9 @@ class BlogCategory(ModelMixin):
         return self.name
 
     def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = self.generate_unique_slug(self.name)
         if not self.meta_title:
             self.meta_title = self.name
         super().save(*args, **kwargs)
-
-    def generate_unique_slug(self, name):
-        """Generate unique slug"""
-        base_slug = slugify(name)
-        slug = base_slug
-        counter = 1
-        while BlogCategory.objects.filter(slug=slug).exists():
-            slug = f"{base_slug}-{counter}"
-            counter += 1
-        return slug
 
     @property
     def full_name(self):
@@ -71,7 +56,6 @@ class BlogCategory(ModelMixin):
 class BlogTag(ModelMixin):
     """Tags for blog posts"""
     name = models.CharField(max_length=50, unique=True)
-    slug = models.SlugField(max_length=50, unique=True, blank=True)
     description = models.TextField(blank=True, null=True)
     color = models.CharField(max_length=7, default='#6c757d', help_text='Hex color code for tag')
     posts_count = models.IntegerField(default=0)
@@ -80,33 +64,16 @@ class BlogTag(ModelMixin):
         db_table = 'blog_tags'
         ordering = ['name']
         indexes = [
-            models.Index(fields=['slug']),
             models.Index(fields=['posts_count']),
         ]
 
     def __str__(self):
         return self.name
 
-    def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = self.generate_unique_slug(self.name)
-        super().save(*args, **kwargs)
-
-    def generate_unique_slug(self, name):
-        """Generate unique slug"""
-        base_slug = slugify(name)
-        slug = base_slug
-        counter = 1
-        while BlogTag.objects.filter(slug=slug).exists():
-            slug = f"{base_slug}-{counter}"
-            counter += 1
-        return slug
-
 
 class BlogPost(ModelMixin):
     """Main blog post model"""
     title = models.CharField(max_length=500)
-    slug = models.SlugField(max_length=500, unique=True, blank=True)
     excerpt = models.TextField(max_length=300, blank=True, help_text='Short description for preview')
     content = models.TextField()
     post_type = models.CharField(max_length=20, choices=POST_TYPE, default='standard')
@@ -142,7 +109,6 @@ class BlogPost(ModelMixin):
         db_table = 'blog_posts'
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['slug']),
             models.Index(fields=['author', 'post_status']),
             models.Index(fields=['category', 'post_status']),
             models.Index(fields=['is_featured', 'post_status']),
@@ -154,9 +120,6 @@ class BlogPost(ModelMixin):
         return self.title
 
     def save(self, *args, **kwargs):
-        # Generate slug
-        if not self.slug:
-            self.slug = self.generate_unique_slug(self.title)
 
         # Auto-generate SEO fields
         if not self.meta_title:
@@ -174,16 +137,6 @@ class BlogPost(ModelMixin):
         #     self.estimated_read_time = max(1, round(word_count / 200))  # 200 words per minute
 
         super().save(*args, **kwargs)
-
-    def generate_unique_slug(self, title):
-        """Generate unique slug"""
-        base_slug = slugify(title)
-        slug = base_slug
-        counter = 1
-        while BlogPost.objects.filter(slug=slug).exists():
-            slug = f"{base_slug}-{counter}"
-            counter += 1
-        return slug
 
     @property
     def is_published(self):

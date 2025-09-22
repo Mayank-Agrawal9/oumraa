@@ -13,7 +13,6 @@ from django.core.cache import cache
 
 class Category(ModelMixin):
     name = models.CharField(max_length=255, unique=True)
-    slug = models.SlugField(max_length=255, unique=True)
     description = models.TextField(null=True, blank=True)
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children')
     image = models.URLField(null=True, blank=True)
@@ -23,7 +22,6 @@ class Category(ModelMixin):
         db_table = 'categories'
         verbose_name_plural = 'Categories'
         indexes = [
-            models.Index(fields=['slug']),
             models.Index(fields=['parent'])
         ]
 
@@ -38,7 +36,6 @@ class Category(ModelMixin):
 
 class SubCategory(ModelMixin):
     name = models.CharField(max_length=255, unique=True)
-    slug = models.SlugField(max_length=255, unique=True)
     description = models.TextField(null=True, blank=True)
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='sub_categories')
     image = models.URLField(null=True, blank=True)
@@ -48,7 +45,6 @@ class SubCategory(ModelMixin):
         db_table = 'sub categories'
         verbose_name_plural = 'Sub Categories'
         indexes = [
-            models.Index(fields=['slug']),
             models.Index(fields=['category'])
         ]
 
@@ -63,14 +59,13 @@ class SubCategory(ModelMixin):
 
 class Brand(ModelMixin):
     name = models.CharField(max_length=255, unique=True)
-    slug = models.SlugField(max_length=255, unique=True)
     description = models.TextField(null=True, blank=True)
     logo = models.URLField(null=True, blank=True)
 
     class Meta:
         db_table = 'brands'
         indexes = [
-            models.Index(fields=['slug'])
+            models.Index(fields=['name'])
         ]
 
     def save(self, *args, **kwargs):
@@ -84,7 +79,6 @@ class Brand(ModelMixin):
 
 class Product(ModelMixin):
     name = models.CharField(max_length=500)
-    slug = models.SlugField(max_length=500, unique=True)
     description = models.TextField()
     short_description = models.TextField(max_length=500, null=True, blank=True)
     sub_category = models.ForeignKey(SubCategory, on_delete=models.PROTECT, related_name='products')
@@ -110,7 +104,6 @@ class Product(ModelMixin):
     class Meta:
         db_table = 'products'
         indexes = [
-            models.Index(fields=['slug']),
             models.Index(fields=['sku']),
             models.Index(fields=['sub_category']),
             models.Index(fields=['brand']),
@@ -267,12 +260,11 @@ class ProductImage(ModelMixin):
 
 class ProductAttribute(ModelMixin):
     name = models.CharField(max_length=255)
-    slug = models.SlugField(max_length=255)
     is_required = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'product_attributes'
-        unique_together = ['name', 'slug']
+        unique_together = ['name']
 
 
 class ProductAttributeValue(ModelMixin):

@@ -11,7 +11,7 @@ from utils.admin import CustomModelAdminMixin
 @admin.register(Category)
 class CategoryAdmin(CustomModelAdminMixin, ImportExportModelAdmin):
     resource_class = CategoryResource
-    search_fields = ['id', 'name', 'slug']
+    search_fields = ['id', 'name']
     raw_id_fields = ('parent', )
     list_filter = ('status', )
 
@@ -19,7 +19,7 @@ class CategoryAdmin(CustomModelAdminMixin, ImportExportModelAdmin):
 @admin.register(SubCategory)
 class SubCategoryAdmin(CustomModelAdminMixin, ImportExportModelAdmin):
     resource_class = SubCategoryResource
-    search_fields = ['id', 'name', 'slug']
+    search_fields = ['id', 'name']
     raw_id_fields = ('category', )
     list_filter = ('status', )
 
@@ -27,14 +27,14 @@ class SubCategoryAdmin(CustomModelAdminMixin, ImportExportModelAdmin):
 @admin.register(Brand)
 class BrandAdmin(CustomModelAdminMixin, ImportExportModelAdmin):
     resource_class = BrandResource
-    search_fields = ['id', 'name', 'slug']
+    search_fields = ['id', 'name']
     list_filter = ('status', )
 
 
 @admin.register(Product)
 class ProductAdmin(CustomModelAdminMixin, ImportExportModelAdmin):
     resource_class = ProductResource
-    search_fields = ['id', 'name', 'slug']
+    search_fields = ['id', 'name']
     raw_id_fields = ('sub_category', 'brand')
     list_filter = ('status', )
 
@@ -50,7 +50,7 @@ class ProductImageAdmin(CustomModelAdminMixin, ImportExportModelAdmin):
 @admin.register(ProductAttribute)
 class ProductAttributeAdmin(CustomModelAdminMixin, ImportExportModelAdmin):
     resource_class = ProductAttributeResource
-    search_fields = ['id', 'name', 'slug']
+    search_fields = ['id', 'name']
     list_filter = ('status', )
 
 
@@ -73,7 +73,7 @@ class ProductVariantAdmin(CustomModelAdminMixin, ImportExportModelAdmin):
 @admin.register(ProductVariantAttribute)
 class ProductVariantAttributeAdmin(CustomModelAdminMixin, ImportExportModelAdmin):
     resource_class = ProductVariantAttributeResource
-    search_fields = ['id', 'name', 'slug']
+    search_fields = ['id', 'name']
     raw_id_fields = ('variant', 'attribute', 'value')
     list_filter = ('status', )
 
@@ -159,7 +159,7 @@ class ReviewAdmin(CustomModelAdminMixin, ImportExportModelAdmin):
 @admin.register(ProductView)
 class ProductViewAdmin(CustomModelAdminMixin, ImportExportModelAdmin):
     resource_class = ProductViewResource
-    search_fields = ['id', 'name', 'slug']
+    search_fields = ['id', 'name']
     list_filter = ('status', )
 
 

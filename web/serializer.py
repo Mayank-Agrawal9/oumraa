@@ -31,7 +31,7 @@ class ProductSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Product
-        fields = ('id', 'name', 'slug', 'short_description', 'sku', 'price', 'primary_image_url', 'category_name',
+        fields = ('id', 'name', 'short_description', 'sku', 'price', 'primary_image_url', 'category_name',
                   'sub_category_name', 'is_featured', 'is_popular', 'is_best_seller')
 
 
@@ -43,7 +43,7 @@ class BlogCategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = BlogCategory
         fields = [
-            'id', 'name', 'slug', 'description', 'parent', 'full_name',
+            'id', 'name', 'description', 'parent', 'full_name',
             'color', 'icon', 'image', 'posts_count', 'meta_title', 'meta_description'
         ]
 
@@ -53,7 +53,7 @@ class BlogTagSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BlogTag
-        fields = ['id', 'name', 'slug', 'description', 'color', 'posts_count']
+        fields = ['id', 'name', 'description', 'color', 'posts_count']
 
 
 class BlogCommentSerializer(serializers.ModelSerializer):
@@ -93,7 +93,7 @@ class BlogPostListSerializer(serializers.ModelSerializer):
     class Meta:
         model = BlogPost
         fields = [
-            'id', 'title', 'slug', 'excerpt', 'featured_image', 'featured_image_alt',
+            'id', 'title', 'excerpt', 'featured_image', 'featured_image_alt',
             'author_name', 'category_name', 'category_color', 'tags', 'post_type',
             'views_count', 'comments_count',
             'reading_time_text', 'is_featured'
@@ -113,7 +113,7 @@ class BlogPostDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = BlogPost
         fields = [
-            'id', 'title', 'slug', 'excerpt', 'content', 'post_type',
+            'id', 'title', 'excerpt', 'content', 'post_type',
             'featured_image', 'featured_image_alt', 'gallery_images',
             'author_name', 'author_avatar', 'category', 'tags',
             'views_count', 'comments_count', 'shares_count',
@@ -144,7 +144,7 @@ class BlogPostCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = BlogPost
         fields = [
-            'title', 'slug', 'excerpt', 'content', 'post_type', 'post_status',
+            'title', 'excerpt', 'content', 'post_type', 'post_status',
             'category', 'tags', 'featured_image', 'featured_image_alt',
             'gallery_images', 'scheduled_at',
             'meta_title', 'meta_description', 'meta_keywords',
@@ -234,7 +234,7 @@ class BrandDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Brand
-        fields = ['id', 'name', 'slug', 'description', 'logo']
+        fields = ['id', 'name', 'description', 'logo']
 
 
 class SubCategoryDetailSerializer(serializers.ModelSerializer):
@@ -244,7 +244,7 @@ class SubCategoryDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = SubCategory
         fields = [
-            'id', 'name', 'slug', 'description', 'category_path', 'image'
+            'id', 'name', 'description', 'category_path', 'image'
         ]
 
     def get_category_path(self, obj):
@@ -252,7 +252,7 @@ class SubCategoryDetailSerializer(serializers.ModelSerializer):
         path = []
         category = obj.category
         if category:
-            path.append({'id': category.id, 'name': category.name, 'slug': category.slug})
+            path.append({'id': category.id, 'name': category.name})
         return list(reversed(path))
 
 
@@ -262,7 +262,7 @@ class ProductAttributeDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProductAttribute
-        fields = ['id', 'name', 'slug', 'is_required', 'values']
+        fields = ['id', 'name', 'is_required', 'values']
 
     def get_values(self, obj):
         return [
@@ -289,7 +289,7 @@ class ProductVariantDetailSerializer(serializers.ModelSerializer):
         variant_attrs = obj.attributes.select_related('attribute', 'value').all()
         result = {}
         for attr in variant_attrs:
-            result[attr.attribute.slug] = {
+            result[attr.attribute.name] = {
                 'attribute_id': str(attr.attribute.id),
                 'attribute_name': attr.attribute.name,
                 'value_id': str(attr.value.id),
@@ -364,7 +364,7 @@ class RelatedProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = [
-            'id', 'name', 'slug', 'price', 'compare_price', 'primary_image',
+            'id', 'name', 'price', 'compare_price', 'primary_image',
             'category_name', 'brand_name', 'average_rating', 'reviews_count',
             'discount_percentage', 'is_featured'
         ]
@@ -434,7 +434,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             # Basic product info
-            'id', 'name', 'slug', 'description', 'short_description', 'sku',
+            'id', 'name', 'description', 'short_description', 'sku',
             'price', 'compare_price', 'cost_price',
 
             # Relationships
@@ -509,7 +509,6 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             result.append({
                 'id': str(attr.id),
                 'name': attr.name,
-                'slug': attr.slug,
                 'is_required': attr.is_required,
                 'values': [
                     {'id': str(value_id), 'value': value}
@@ -703,7 +702,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     def get_seo_data(self, obj):
         """Get SEO and structured data"""
         return {
-            'canonical_url': f"/product/{obj.slug}",
+            'canonical_url': f"/product/",
             'structured_data': self._get_structured_data(obj)
         }
 
@@ -800,7 +799,7 @@ class ProductMinimalSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Product
-        fields = ['id', 'name', 'slug', 'price', 'stock_quantity', 'primary_image']
+        fields = ['id', 'name', 'price', 'stock_quantity', 'primary_image']
 
     def get_primary_image(self, obj):
         """Get primary image"""
@@ -1074,8 +1073,8 @@ class BlogPostSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BlogPost
-        fields = ['id', 'title', 'slug', 'comments_count']
-        read_only_fields = ['id', 'title', 'slug', 'comments_count']
+        fields = ['id', 'title', 'comments_count']
+        read_only_fields = ['id', 'title', 'comments_count']
 
     def get_comments_count(self, obj):
         return obj.comments.filter(comment_status='approved').count()

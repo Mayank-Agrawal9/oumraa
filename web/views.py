@@ -352,11 +352,11 @@ class BlogPostViewSet(ModelViewSet):
         # Filters
         category = self.request.query_params.get('category')
         if category:
-            queryset = queryset.filter(category__slug=category)
+            queryset = queryset.filter(category__id=category)
 
         tag = self.request.query_params.get('tag')
         if tag:
-            queryset = queryset.filter(tags__slug=tag)
+            queryset = queryset.filter(tags__id=tag)
 
         author = self.request.query_params.get('author')
         if author:
