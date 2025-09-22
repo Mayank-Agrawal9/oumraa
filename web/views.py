@@ -1,14 +1,19 @@
 
 from django.core.cache import cache
 from django.db import transaction
-from rest_framework import status, permissions
+from django_filters import filters
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import status, permissions, generics
 from rest_framework.decorators import action
+from rest_framework.generics import get_object_or_404
 from rest_framework.pagination import LimitOffsetPagination
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 
 from product.models import ProductFAQ, Banner
+from web.helpers import GetClientIPMixin
 from web.models import BlogPostView, BlogPost, BlogTag, BlogCategory
 from web.serializer import *
 
@@ -107,8 +112,8 @@ class GetProductView(APIView):
     def get(self, request):
         try:
             product_id = request.query_params.get("product_id")
-            category_id = request.query_params.get("category_id")
-            sub_category_id = request.query_params.get("sub_category_id")
+            category_id = request.query_params.get("category")
+            sub_category_id = request.query_params.get("subcategory")
             is_featured = request.query_params.get("is_featured")
             is_popular = request.query_params.get("is_popular")
             is_best_seller = request.query_params.get("is_best_seller")
@@ -256,18 +261,23 @@ class GetBlogsView(APIView):
         try:
             blog_id = request.query_params.get("blog_id")
             is_featured = request.query_params.get("is_featured", False)
-            blogs = self._get_cached_blogs(blog_id, is_featured)
+            search_query = request.query_params.get("search", "").strip()
+
+            blogs = self._get_cached_blogs(blog_id, is_featured, search_query)
             return Response(blogs, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-    def _get_cached_blogs(self, blog_id=None, is_featured=False):
+    def _get_cached_blogs(self, blog_id=None, is_featured=False, search_query=""):
         cache_key = "blogs_v1"
         if blog_id:
             cache_key += f"_id{blog_id}"
 
         if is_featured:
             cache_key += f"_featured_blogs"
+
+        if search_query:
+            cache_key += f"_search_{hash(search_query)}"
 
         cache_timeout = getattr(settings, 'BLOGS_CACHE_TIMEOUT', 7200)
 
@@ -281,8 +291,21 @@ class GetBlogsView(APIView):
             if is_featured:
                 queryset = queryset.filter(is_featured=True)[:5]
 
-            categories = BlogPostListSerializer(queryset, many=True).data
-            cache.set(cache_key, categories, cache_timeout)
+            if search_query:
+                search_filter = Q(title__icontains=search_query) | \
+                                Q(content__icontains=search_query) | \
+                                Q(category__name__icontains=search_query) | \
+                                Q(author__username__icontains=search_query)
+
+                queryset = queryset.filter(search_filter)
+
+            blogs = BlogPostListSerializer(queryset, many=True).data
+
+            if search_query:
+                cache_timeout = min(cache_timeout, 1800)
+
+            cache.set(cache_key, blogs, cache_timeout)
+
         return blogs
 
 
@@ -943,3 +966,108 @@ class GetBrandAPIView(APIView):
             cache.set(cache_key, brands, cache_timeout)
 
         return brands
+
+
+class PostCommentsListView(generics.ListAPIView):
+    """List all approved comments for a specific blog post"""
+    serializer_class = CommentSerializer
+    permission_classes = [AllowAny]
+    filter_backends = [DjangoFilterBackend,]
+    ordering_fields = ['created_at', 'likes_count']
+    ordering = ['-created_at']
+
+    def get_queryset(self):
+        post_id = self.kwargs['post_id']
+        post = get_object_or_404(BlogPost, id=post_id)
+
+        return BlogComment.objects.filter(
+            post=post, comment_status='approved', parent__isnull=True
+        ).select_related('user').prefetch_related('replies__user')
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+
+
+class CommentCreateView(GetClientIPMixin, generics.CreateAPIView):
+    """Create a new comment or reply"""
+    serializer_class = CommentCreateSerializer
+    permission_classes = [AllowAny]
+
+    def perform_create(self, serializer):
+        post = get_object_or_404(BlogPost, id=self.kwargs['post_id'])
+
+        parent = None
+        parent_id = serializer.validated_data.get('parent_id')
+        if parent_id:
+            parent = get_object_or_404(
+                BlogComment, id=parent_id, post=post
+            )
+
+        comment = serializer.save(
+            post=post, parent=parent, ip_address=self.get_client_ip(),
+            user_agent=self.request.META.get('HTTP_USER_AGENT', ''),
+            user=self.request.user if self.request.user.is_authenticated else None, comment_status='approved'
+        )
+
+        return comment
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(
+            {'message': 'Comment submitted posted.'},
+            status=status.HTTP_200_OK
+        )
+
+
+class CommentDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Retrieve, update, or delete a specific comment"""
+    serializer_class = CommentSerializer
+
+    def get_queryset(self):
+        return BlogComment.objects.filter(comment_status='approved')
+
+    def get_permissions(self):
+        """Different permissions for different actions"""
+        if self.request.method == 'GET':
+            permission_classes = [AllowAny]
+        else:
+            permission_classes = [permissions.IsAuthenticated]
+        return [permission() for permission in permission_classes]
+
+    def get_object(self):
+        obj = super().get_object()
+
+        if self.request.method in ['PUT', 'PATCH', 'DELETE']:
+            if obj.user != self.request.user and not self.request.user.is_staff:
+                self.permission_denied(
+                    self.request,
+                    message="You can only modify your own comments."
+                )
+
+        return obj
+
+    def perform_update(self, serializer):
+        serializer.save(
+            is_edited=True, edited_at=timezone.now()
+        )
+
+    def perform_destroy(self, instance):
+        instance.comment_status = 'deleted'
+        instance.save(update_fields=['comment_status'])
+
+
+class CommentRepliesListView(generics.ListAPIView):
+    """List all replies for a specific comment"""
+    serializer_class = CommentReplySerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        comment_id = self.kwargs['comment_id']
+        parent_comment = get_object_or_404(
+            BlogComment, id=comment_id, comment_status='approved'
+        )
+        return parent_comment.replies.filter(comment_status='approved').select_related('user').order_by('created_at')

@@ -4,6 +4,7 @@ from django.db.models import Avg, Q, F, Count, Sum
 from django.utils import timezone
 from rest_framework import serializers
 
+from account.models import User
 from oumraa import settings
 from product.models import Category, SubCategory, Product, ProductImage, Brand, ProductAttribute, ProductVariant, \
     Review, ProductTax, ProductVariantAttribute, Coupon, ProductFAQ, CartItem, Cart, Banner
@@ -64,12 +65,12 @@ class BlogCommentSerializer(serializers.ModelSerializer):
     class Meta:
         model = BlogComment
         fields = [
-            'id', 'content', 'author_name', 'likes_count', 'created_at',
+            'id', 'content', 'author_name', 'created_at',
             'is_edited', 'edited_at', 'replies', 'can_edit'
         ]
 
     def get_replies(self, obj):
-        if obj.parent is None:  # Only get replies for top-level comments
+        if obj.parent is None:
             replies = obj.get_replies()
             return BlogCommentSerializer(replies, many=True, context=self.context).data
         return []
@@ -94,7 +95,7 @@ class BlogPostListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'slug', 'excerpt', 'featured_image', 'featured_image_alt',
             'author_name', 'category_name', 'category_color', 'tags', 'post_type',
-            'views_count', 'likes_count', 'comments_count',
+            'views_count', 'comments_count',
             'reading_time_text', 'is_featured'
         ]
 
@@ -115,11 +116,9 @@ class BlogPostDetailSerializer(serializers.ModelSerializer):
             'id', 'title', 'slug', 'excerpt', 'content', 'post_type',
             'featured_image', 'featured_image_alt', 'gallery_images',
             'author_name', 'author_avatar', 'category', 'tags',
-            'views_count', 'likes_count', 'comments_count', 'shares_count',
-            'reading_time_text', 'allow_comments',
-            'meta_title', 'meta_description', 'meta_keywords',
-            'og_title', 'og_description', 'og_image',
-            'comments', 'related_posts'
+            'views_count', 'comments_count', 'shares_count',
+            'reading_time_text', 'allow_comments', 'meta_title', 'meta_description', 'meta_keywords',
+            'og_title', 'og_description', 'og_image', 'comments', 'related_posts'
         ]
 
     def get_comments(self, obj):
@@ -961,3 +960,122 @@ class BrandsSerializer(serializers.ModelSerializer):
         model = Brand
         fields = ["id", "name", "logo"]
 
+
+class UserSerializer(serializers.ModelSerializer):
+    """Serializer for user information in comments"""
+    full_name = serializers.CharField(source='get_full_name', read_only=True)
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'full_name', 'email']
+        read_only_fields = ['id', 'username', 'full_name', 'email']
+
+
+class CommentReplySerializer(serializers.ModelSerializer):
+    """Serializer for comment replies"""
+    user = UserSerializer(read_only=True)
+    replies_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BlogComment
+        fields = [
+            'id', 'content', 'user', 'guest_name', 'guest_email', 'created_at', 'replies_count'
+        ]
+        read_only_fields = ['id', 'created_at']
+
+    def get_replies_count(self, obj):
+        return obj.replies.filter(comment_status='approved').count()
+
+
+class CommentSerializer(serializers.ModelSerializer):
+    """Main serializer for blog comments"""
+    user = UserSerializer(read_only=True)
+    replies = CommentReplySerializer(many=True, read_only=True)
+    replies_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BlogComment
+        fields = [
+            'id', 'content', 'user', 'guest_name', 'guest_email',
+            'guest_phone_number', 'comment_status', 'created_at', 'updated_on',
+            'replies', 'replies_count'
+        ]
+        read_only_fields = [
+            'id', 'comment_status', 'created_at', 'updated_on'
+        ]
+
+    def get_replies_count(self, obj):
+        return obj.replies.filter(comment_status='approved').count()
+
+    def validate(self, data):
+        request = self.context.get('request')
+
+        if not request.user.is_authenticated:
+            if not data.get('guest_name'):
+                raise serializers.ValidationError({
+                    'guest_name': 'This field is required for guest comments.'
+                })
+            if not data.get('guest_email'):
+                raise serializers.ValidationError({
+                    'guest_email': 'This field is required for guest comments.'
+                })
+
+        return data
+
+
+class CommentCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating comments"""
+    parent_id = serializers.CharField(required=False, write_only=True)
+
+    class Meta:
+        model = BlogComment
+        fields = [
+            'content', 'guest_name', 'guest_email', 'guest_phone_number', 'parent_id'
+        ]
+
+    def validate_parent_id(self, value):
+        if value:
+            try:
+                parent = BlogComment.objects.get(id=value, comment_status='approved')
+                if parent.parent:
+                    raise serializers.ValidationError(
+                        "Cannot reply to a reply. Please reply to the main comment."
+                    )
+            except BlogComment.DoesNotExist:
+                raise serializers.ValidationError("Parent comment not found.")
+        return value
+
+    def validate(self, attrs):
+        request = self.context['request']
+        user = request.user
+
+        if user and user.is_authenticated:
+            # Authenticated → enforce user presence
+            # Remove guest_name/email requirement
+            attrs['guest_name'] = None
+            attrs['guest_email'] = None
+        else:
+            # Guest user → guest_name and guest_email are required
+            if not attrs.get('guest_name'):
+                raise serializers.ValidationError(
+                    {"guest_name": "This field is required for guest users."}
+                )
+            if not attrs.get('guest_email'):
+                raise serializers.ValidationError(
+                    {"guest_email": "This field is required for guest users."}
+                )
+
+        return attrs
+
+
+class BlogPostSerializer(serializers.ModelSerializer):
+    """Basic serializer for blog post in comment context"""
+    comments_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BlogPost
+        fields = ['id', 'title', 'slug', 'comments_count']
+        read_only_fields = ['id', 'title', 'slug', 'comments_count']
+
+    def get_comments_count(self, obj):
+        return obj.comments.filter(comment_status='approved').count()

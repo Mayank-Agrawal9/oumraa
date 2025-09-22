@@ -19,4 +19,9 @@ urlpatterns = [
     path('banner-list/', GetBannerView.as_view(), name='get_homepage_banner'),
     path('sub-category/', ProductsBySubCategoryAPIView.as_view(), name='product_by_subcategory'),
     path('brands/', GetBrandAPIView.as_view(), name='get_brand'),
+
+    path('posts/<str:post_id>/comments/', PostCommentsListView.as_view(), name='post-comments'),
+    path('posts/<str:post_id>/comments/create/', CommentCreateView.as_view(), name='comment-create'),
+    path('comments/<str:pk>/', CommentDetailView.as_view(), name='comment-detail'),
+    path('comments/<str:comment_id>/replies/', CommentRepliesListView.as_view(), name='comment-replies')
 ]

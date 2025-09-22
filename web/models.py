@@ -247,7 +247,7 @@ class BlogComment(ModelMixin):
     likes_count = models.PositiveIntegerField(default=0)
 
     # Metadata
-    ip_address = models.GenericIPAddressField()
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(blank=True)
 
     # Moderation
