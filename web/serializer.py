@@ -27,6 +27,13 @@ class CategorySerializer(serializers.ModelSerializer):
         exclude = ('created_at', 'updated_on', 'status', 'parent')
 
 
+class ListBlogCategorySerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = BlogCategory
+        fields = ('id', 'name', 'description', 'image')
+
+
 class ProductSerializer(serializers.ModelSerializer):
 
     class Meta:

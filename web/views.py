@@ -106,6 +106,27 @@ class GetCategoryView(APIView):
         return categories
 
 
+class GetBlogCategoryView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        try:
+            categories = self._get_cached_blog_categories()
+            return Response({"data": {"categories": categories}}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def _get_cached_blog_categories(self):
+        cache_key = "blog_categories_v1"
+        cache_timeout = getattr(settings, 'BLOG_CATEGORY_CACHE_TIMEOUT', 7200)
+        categories = cache.get(cache_key)
+        if categories is None:
+            queryset = BlogCategory.active_objects.order_by("name")
+            categories = ListBlogCategorySerializer(queryset, many=True).data
+            cache.set(cache_key, categories, cache_timeout)
+        return categories
+
+
 class GetProductView(APIView):
     permission_classes = [permissions.AllowAny]
 
