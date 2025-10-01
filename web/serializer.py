@@ -957,7 +957,7 @@ class BannerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Banner
-        fields = ["id", "title", "image", "subcategories", "created_at"]
+        fields = ["id", "title", "image", "subcategories", "created_at", "description"]
 
 
 class BrandsSerializer(serializers.ModelSerializer):

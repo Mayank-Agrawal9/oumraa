@@ -630,6 +630,7 @@ class Banner(ModelMixin):
     title = models.CharField(max_length=255)
     image = models.URLField(max_length=1000)
     subcategories = models.ManyToManyField(SubCategory, related_name="banners")
+    description = models.TextField(null=True, blank=True)
     sort_order = models.IntegerField(default=0)
 
     def __str__(self):
