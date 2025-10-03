@@ -35,11 +35,54 @@ class ListBlogCategorySerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
+    stock_info = serializers.SerializerMethodField()
+
+    def get_stock_info(self, obj):
+        """Get comprehensive stock information"""
+        stock_info = {
+            'is_in_stock': obj.stock_quantity > 0,
+            'stock_quantity': obj.stock_quantity,
+            'low_stock_threshold': obj.low_stock_threshold,
+            'is_low_stock': obj.stock_quantity <= obj.low_stock_threshold if obj.low_stock_threshold else False,
+            'track_inventory': obj.track_inventory,
+            'allow_backorder': obj.allow_backorder,
+            'stock_status': 'in_stock',
+            'availability_message': '',
+            'estimated_delivery': None
+        }
+
+        # Determine stock status
+        if obj.stock_quantity <= 0:
+            stock_info['stock_status'] = 'out_of_stock'
+            stock_info['availability_message'] = 'Out of stock'
+            if obj.allow_backorder:
+                stock_info['availability_message'] = 'Available on backorder'
+                stock_info['estimated_delivery'] = '7-10 business days'
+        elif obj.stock_quantity <= obj.low_stock_threshold:
+            stock_info['stock_status'] = 'low_stock'
+            stock_info['availability_message'] = f'Only {obj.stock_quantity} left in stock'
+        else:
+            stock_info['availability_message'] = 'In stock'
+            stock_info['estimated_delivery'] = '2-3 business days'
+
+        # Variant stock info
+        if obj.variants.filter(status='active').exists():
+            variant_stock = []
+            for variant in obj.variants.filter(status='active'):
+                variant_stock.append({
+                    'variant_id': str(variant.id),
+                    'sku': variant.sku,
+                    'stock_quantity': variant.stock_quantity,
+                    'is_in_stock': variant.stock_quantity > 0
+                })
+            stock_info['variant_stock'] = variant_stock
+
+        return stock_info
 
     class Meta:
         model = Product
         fields = ('id', 'name', 'short_description', 'sku', 'price', 'primary_image_url', 'category_name',
-                  'sub_category_name', 'is_featured', 'is_popular', 'is_best_seller')
+                  'sub_category_name', 'is_featured', 'is_popular', 'is_best_seller', 'stock_info')
 
 
 class BlogCategorySerializer(serializers.ModelSerializer):
@@ -1032,6 +1075,8 @@ class CommentSerializer(serializers.ModelSerializer):
 class CommentCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating comments"""
     parent_id = serializers.CharField(required=False, write_only=True)
+    guest_name = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    guest_email = serializers.EmailField(required=False, allow_null=True, allow_blank=True)
 
     class Meta:
         model = BlogComment
@@ -1056,12 +1101,9 @@ class CommentCreateSerializer(serializers.ModelSerializer):
         user = request.user
 
         if user and user.is_authenticated:
-            # Authenticated → enforce user presence
-            # Remove guest_name/email requirement
             attrs['guest_name'] = None
             attrs['guest_email'] = None
         else:
-            # Guest user → guest_name and guest_email are required
             if not attrs.get('guest_name'):
                 raise serializers.ValidationError(
                     {"guest_name": "This field is required for guest users."}

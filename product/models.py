@@ -484,6 +484,30 @@ class Review(ModelMixin):
         ]
 
 
+class ReviewMedia(models.Model):
+    REVIEW_MEDIA_TYPES = (
+        ('image', 'Image'),
+        ('video', 'Video'),
+    )
+
+    review = models.ForeignKey(
+        Review, on_delete=models.CASCADE, related_name='media'
+    )
+    media_type = models.CharField(max_length=10, choices=REVIEW_MEDIA_TYPES)
+    file = models.FileField(upload_to='reviews/media/')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'review_media'
+        indexes = [
+            models.Index(fields=['review']),
+            models.Index(fields=['media_type']),
+        ]
+
+    def __str__(self):
+        return f"{self.media_type} for Review {self.review_id}"
+
+
 class ProductView(ModelMixin):
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)

@@ -1014,7 +1014,7 @@ class PostCommentsListView(generics.ListAPIView):
 class CommentCreateView(GetClientIPMixin, generics.CreateAPIView):
     """Create a new comment or reply"""
     serializer_class = CommentCreateSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [AllowAny, ]
 
     def perform_create(self, serializer):
         post = get_object_or_404(BlogPost, id=self.kwargs['post_id'])

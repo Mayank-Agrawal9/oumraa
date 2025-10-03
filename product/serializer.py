@@ -101,7 +101,19 @@ class CreateWishlistSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 
+class ReviewMediaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReviewMedia
+        fields = ['id', 'media_type', 'file']
+
+
 class CreateReviewSerializer(serializers.ModelSerializer):
+    files = serializers.ListField(
+        child=serializers.FileField(max_length=100000, allow_empty_file=False, use_url=False),
+        write_only=True,
+        required=False
+    )
+
     class Meta:
         model = Review
         fields = '__all__'
@@ -112,13 +124,29 @@ class CreateReviewSerializer(serializers.ModelSerializer):
         product = attrs.get("product")
 
         if Review.objects.filter(user=user, product=product).exists():
-            raise serializers.ValidationError({"error": "You Already submitted review."})
+            raise serializers.ValidationError({"error": "You already submitted a review."})
 
         return attrs
 
     def create(self, validated_data):
+        files = validated_data.pop("files", [])
         validated_data["user"] = self.context["request"].user
-        return super().create(validated_data)
+
+        review = Review.objects.create(**validated_data)
+
+        for file in files:
+            ReviewMedia.objects.create(review=review, media_type=self._guess_type(file), file=file)
+
+        return review
+
+    def _guess_type(self, file):
+        """Helper to detect if it's image or video"""
+        if file.content_type.startswith("image/"):
+            return "image"
+        elif file.content_type.startswith("video/"):
+            return "video"
+        return "image"
+
 
 
 class BrandSerializer(serializers.ModelSerializer):

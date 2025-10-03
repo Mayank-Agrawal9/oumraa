@@ -206,3 +206,10 @@ class BannerResource(resources.ModelResource):
         model = Banner
         import_id_fields = ('id',)
         exclude = EXCLUDE_FOR_API
+
+
+class ReviewMediaResource(resources.ModelResource):
+    class Meta:
+        model = ReviewMedia
+        import_id_fields = ('id',)
+        exclude = EXCLUDE_FOR_API

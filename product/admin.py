@@ -231,3 +231,9 @@ class BannerAdmin(CustomModelAdminMixin, ImportExportModelAdmin):
     resource_class = BannerResource
     search_fields = ['id', 'title']
     list_filter = ('status', )
+
+
+@admin.register(ReviewMedia)
+class ReviewMediaAdmin(CustomModelAdminMixin, ImportExportModelAdmin):
+    resource_class = ReviewMediaResource
+    search_fields = ['id', 'media_type']

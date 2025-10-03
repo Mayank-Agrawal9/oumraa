@@ -188,8 +188,8 @@ class BlogComment(ModelMixin):
 
     # User Information
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='blog_comments')
-    guest_name = models.CharField(max_length=100, blank=True)
-    guest_email = models.EmailField(blank=True)
+    guest_name = models.CharField(max_length=100, blank=True, null=True)
+    guest_email = models.EmailField(blank=True, null=True)
     guest_phone_number = models.CharField(max_length=15, blank=True)
 
     # Comment Content
