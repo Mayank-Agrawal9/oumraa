@@ -3,3 +3,4 @@ db.sqlite3
 oumraa/settings_local.py
 *.idea
 celerybeat-schedule.db
+public
