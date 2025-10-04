@@ -464,7 +464,7 @@ class Shipment(ModelMixin):
 
 
 class Review(ModelMixin):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reviews')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_reviews')
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='reviews')
     order_item = models.ForeignKey(OrderItem, on_delete=models.CASCADE, null=True, blank=True)
     rating = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])

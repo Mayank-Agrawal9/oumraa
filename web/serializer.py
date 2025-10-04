@@ -7,7 +7,7 @@ from rest_framework import serializers
 from account.models import User
 from oumraa import settings
 from product.models import Category, SubCategory, Product, ProductImage, Brand, ProductAttribute, ProductVariant, \
-    Review, ProductTax, ProductVariantAttribute, Coupon, ProductFAQ, CartItem, Cart, Banner
+    Review, ProductTax, ProductVariantAttribute, Coupon, ProductFAQ, CartItem, Cart, Banner, ReviewMedia
 from web.helpers import CartManager
 from web.models import BlogCategory, BlogTag, BlogComment, BlogPost
 
@@ -364,19 +364,35 @@ class ProductVariantDetailSerializer(serializers.ModelSerializer):
         return obj.stock_quantity > 0 if obj.stock_quantity is not None else obj.product.stock_quantity > 0
 
 
+class ReviewMediaSerializer(serializers.ModelSerializer):
+    file = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ReviewMedia
+        fields = ['id', 'file', 'media_type']
+
+    def get_file(self, obj):
+        """Return full URL for media file"""
+        request = self.context.get('request')
+        if obj.file and hasattr(obj.file, 'url'):
+            return request.build_absolute_uri(obj.file.url) if request else obj.file.url
+        return None
+
+
 class ReviewSummarySerializer(serializers.ModelSerializer):
     """Serializer for product reviews"""
     user_name = serializers.CharField(source='user.get_full_name', read_only=True)
     user_avatar = serializers.SerializerMethodField()
     is_verified_purchase = serializers.BooleanField()
     helpful_percentage = serializers.SerializerMethodField()
+    media = ReviewMediaSerializer(many=True, read_only=True)
 
     class Meta:
         model = Review
         fields = [
             'id', 'rating', 'title', 'comment', 'user_name', 'user_avatar',
             'is_verified_purchase', 'helpful_count', 'helpful_percentage',
-            'created_at'
+            'created_at', 'media'
         ]
 
     def get_user_avatar(self, obj):
@@ -387,8 +403,12 @@ class ReviewSummarySerializer(serializers.ModelSerializer):
 
     def get_helpful_percentage(self, obj):
         """Calculate helpful percentage (mock calculation)"""
-        total_votes = obj.helpful_count + 5  # Mock total votes
+        total_votes = obj.helpful_count + 5
         return round((obj.helpful_count / total_votes) * 100, 1) if total_votes > 0 else 0
+
+    def get_media(self, obj):
+        all_media = obj.media.all()
+        return all_media
 
 
 class ProductTaxDetailSerializer(serializers.ModelSerializer):
