@@ -1012,7 +1012,7 @@ class GetBrandAPIView(APIView):
 
 class PostCommentsListView(generics.ListAPIView):
     """List all approved comments for a specific blog post"""
-    serializer_class = CommentSerializer
+    serializer_class = ListCommentSerializer
     permission_classes = [AllowAny]
     filter_backends = [DjangoFilterBackend,]
     ordering_fields = ['created_at', 'likes_count']

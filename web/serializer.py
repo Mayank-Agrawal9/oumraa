@@ -1126,6 +1126,46 @@ class CommentSerializer(serializers.ModelSerializer):
         return data
 
 
+class ListCommentSerializer(serializers.ModelSerializer):
+    """Main serializer for blog comments"""
+    user = UserSerializer(read_only=True)
+    replies = CommentReplySerializer(many=True, read_only=True)
+    replies_count = serializers.SerializerMethodField()
+    guest_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BlogComment
+        fields = [
+            'id', 'content', 'user', 'guest_name', 'guest_email',
+            'guest_phone_number', 'comment_status', 'created_at', 'updated_on',
+            'replies', 'replies_count'
+        ]
+        read_only_fields = [
+            'id', 'comment_status', 'created_at', 'updated_on'
+        ]
+
+    def get_guest_name(self, obj):
+        return obj.guest_name if obj.guest_name else obj.user.get_full_name()
+
+    def get_replies_count(self, obj):
+        return obj.replies.filter(comment_status='approved').count()
+
+    def validate(self, data):
+        request = self.context.get('request')
+
+        if not request.user.is_authenticated:
+            if not data.get('guest_name'):
+                raise serializers.ValidationError({
+                    'guest_name': 'This field is required for guest comments.'
+                })
+            if not data.get('guest_email'):
+                raise serializers.ValidationError({
+                    'guest_email': 'This field is required for guest comments.'
+                })
+
+        return data
+
+
 class CommentCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating comments"""
     parent_id = serializers.CharField(required=False, write_only=True)
