@@ -36,6 +36,7 @@ class ListBlogCategorySerializer(serializers.ModelSerializer):
 
 class ProductSerializer(serializers.ModelSerializer):
     stock_info = serializers.SerializerMethodField()
+    rating_summary = serializers.SerializerMethodField()
 
     def get_stock_info(self, obj):
         """Get comprehensive stock information"""
@@ -79,10 +80,43 @@ class ProductSerializer(serializers.ModelSerializer):
 
         return stock_info
 
+    def get_rating_summary(self, obj):
+        """Get comprehensive rating summary"""
+        reviews = obj.reviews.filter(is_approved=True)
+
+        if not reviews.exists():
+            return {
+                'average_rating': 0,
+                'total_reviews': 0,
+                'rating_distribution': {str(i): 0 for i in range(1, 6)},
+                'percentage_distribution': {str(i): 0 for i in range(1, 6)}
+            }
+
+        rating_counts = {}
+        total_reviews = reviews.count()
+
+        for i in range(1, 6):
+            count = reviews.filter(rating=i).count()
+            rating_counts[str(i)] = count
+
+        percentage_distribution = {}
+        for rating, count in rating_counts.items():
+            percentage_distribution[rating] = round((count / total_reviews) * 100, 1) if total_reviews > 0 else 0
+
+        avg_rating = reviews.aggregate(avg=Avg('rating'))['avg'] or 0
+
+        return {
+            'average_rating': round(avg_rating, 1),
+            'total_reviews': total_reviews,
+            'rating_distribution': rating_counts,
+            'percentage_distribution': percentage_distribution,
+            'verified_purchases': reviews.filter(is_verified_purchase=True).count()
+        }
+
     class Meta:
         model = Product
         fields = ('id', 'name', 'short_description', 'sku', 'price', 'primary_image_url', 'category_name',
-                  'sub_category_name', 'is_featured', 'is_popular', 'is_best_seller', 'stock_info')
+                  'sub_category_name', 'is_featured', 'is_popular', 'is_best_seller', 'stock_info', 'rating_summary')
 
 
 class BlogCategorySerializer(serializers.ModelSerializer):
