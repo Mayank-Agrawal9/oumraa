@@ -618,6 +618,7 @@ class ProductFAQ(ModelMixin):
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='faqs', null=True, blank=True)
     question = models.TextField()
     answer = models.TextField()
+    is_home_page_related = models.BooleanField(default=False)
     sort_order = models.IntegerField(default=0)
 
     class Meta:
@@ -626,6 +627,10 @@ class ProductFAQ(ModelMixin):
             models.Index(fields=['product']),
             models.Index(fields=['category']),
         ]
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        cache.clear()
 
 
 class ProductTax(ModelMixin):

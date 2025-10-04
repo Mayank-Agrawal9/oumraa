@@ -127,6 +127,27 @@ class GetBlogCategoryView(APIView):
         return categories
 
 
+class GetFAQView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        try:
+            faqs = self._get_cached_faqs()
+            return Response({"data": {"faqs": faqs}}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def _get_cached_faqs(self):
+        cache_key = "home_faq_v1"
+        cache_timeout = getattr(settings, 'HOME_FAQ_CACHE_TIMEOUT', 7200)
+        faqs = cache.get(cache_key)
+        if faqs is None:
+            queryset = ProductFAQ.active_objects.filter(is_home_page_related=True).order_by("sort_order")
+            faqs = ProductFaqSerializer(queryset, many=True).data
+            cache.set(cache_key, faqs, cache_timeout)
+        return faqs
+
+
 class GetProductView(APIView):
     permission_classes = [permissions.AllowAny]
 
